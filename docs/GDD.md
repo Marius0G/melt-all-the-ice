@@ -156,7 +156,8 @@ player a half-melted map.
 
 Cave / Pyramid / Troy are three **map definitions** consumed by one generic builder, not three
 generators. `src/shared/MapDefs.luau` holds volume, chunk size, palette, lighting arc, prop set,
-tool set and finale; `src/server/MapBuilder.luau` turns a definition plus a plot origin into a
+tool set and finale; `src/server/IceField.luau` and `src/server/PlotManager.luau` turn a
+definition plus a plot origin into a
 built map, idempotently (AD-3).
 
 This is what makes three maps tractable, and it lets each map choose its own `CHUNK_SIZE`
@@ -185,6 +186,23 @@ per-player:
 The server stays authoritative for **state**; the client owns **presentation**. No cosmetic ever
 decides an outcome.
 
+### AD-7: Landmarks rise through the ice
+
+Each map is built around a structure - the pyramid, the Parthenon - placed on the ice
+footprint and built **taller than the ice**, so its top stands clear from the moment the
+player spawns while the bulk is encased. That gives a map both a goal and a payoff: you can
+see what you are working toward, and clearing the map is what uncovers it. Roughly 44% of
+the pyramid map's cells sit inside the pyramid, so most of what is dug out is dug off the
+monument itself.
+
+They live in their own per-plot folder, never in the ice folder: `MeltService` raycasts with
+an Include filter scoped to exactly that folder, so anything inside it becomes a melt target
+and gets wiped on every rebuild. Buried finds are filtered against the landmark volume,
+because a find inside solid stonework could never be uncovered.
+
+Each map tags one Part as its beacon, which the finale lights - "sa se aprinda varful
+priamidei". The cave's is the campfire from its end-state reference.
+
 ## Settled tuning
 
 Maps are data (`src/shared/MapDefs.luau`). Chunk size is per-map and is what keeps the
@@ -192,7 +210,7 @@ larger maps affordable: Troy is nine times the cave's footprint for about twice 
 
 | Map | Chunk | Grid | Ice volume | Max chunks | $/chunk | Chunk HP |
 |---|---|---|---|---|---|---|
-| Cave | 4 | 16 x 6 x 16 | 64 x 24 x 64 | 1536 | 1 | 30 |
+| Cave | 4 | 12 x 5 x 12 | 48 x 20 x 48 | 720 | 1 | 30 |
 | Pyramid | 8 | 24 x 5 x 24 | 192 x 40 x 192 | 2880 | 6 | 60 |
 | Troy | 8 | 28 x 5 x 28 | 224 x 40 x 224 | 3920 | 20 | 110 |
 
@@ -228,5 +246,7 @@ Other settled values:
 
 - **Monetization** — gamepasses / dev products aren't in the source doc but are the norm for
   this genre. Out of scope until asked.
-- **Weapon customization** — in the source notes, not yet designed. Cosmetic variants on the
-  same base tool, selected by the player.
+Weapon customization is built: seventeen looks across the seven tools, strictly cosmetic
+(colour, material, and flame tint for the fire tools), bought and worn from the WEAPONS tab.
+Cosmetic-only is the point - there is no number in a skin that could reach a swing, so the
+server validates ownership and nothing else.
