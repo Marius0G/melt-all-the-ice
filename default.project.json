@@ -1,0 +1,31 @@
+{
+  "name": "MeltAllTheIce",
+  "globIgnorePaths": ["**/*.spec.luau"],
+  "tree": {
+    "$className": "DataModel",
+
+    "ReplicatedStorage": {
+      "Shared": { "$path": "src/shared" }
+    },
+
+    "ServerScriptService": {
+      "Server": { "$path": "src/server" }
+    },
+
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Client": { "$path": "src/client" }
+      }
+    },
+
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": true
+      }
+    },
+
+    "Lighting": {},
+    "SoundService": {},
+    "ServerStorage": {}
+  }
+}
