@@ -171,7 +171,7 @@ MCP servers are read at session start, so start the session *after* the toggles 
 default.project.json   Rojo tree mapping and place properties
 .luaurc                Luau strict mode + path aliases
 src/                   game source
-assets/blender/        Blender prop sources
+assets/blender/        Blender model sources (props, tools, structures, build)
 tools/                 check.sh, devsync, Open Cloud upload
 docs/GDD.md            design document
 docs/original-notes-ro.md   verbatim source notes

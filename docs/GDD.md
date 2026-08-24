@@ -211,8 +211,12 @@ larger maps affordable: Troy is nine times the cave's footprint for about twice 
 | Map | Chunk | Grid | Ice volume | Max chunks | $/chunk | Chunk HP |
 |---|---|---|---|---|---|---|
 | Cave | 4 | 12 x 5 x 12 | 48 x 20 x 48 | 720 | 1 | 30 |
-| Pyramid | 8 | 24 x 5 x 24 | 192 x 40 x 192 | 2880 | 6 | 60 |
-| Troy | 8 | 28 x 5 x 28 | 224 x 40 x 224 | 3920 | 20 | 110 |
+| Pyramid | 8 | 24 x 4 x 24 | 192 x 32 x 192 | 2304 | 6 | 60 |
+| Troy | 8 | 28 x 4 x 28 | 224 x 32 x 224 | 3136 | 20 | 110 |
+
+The later maps are four chunk layers deep rather than five so their landmarks read from the
+spawn. At 40 studs of ice only the Parthenon's roof cleared the surface and it looked like a
+grey lump; at 32 the top of the colonnade shows and it is legibly a temple.
 
 Tools (`src/shared/Tools.luau`). Damage is set against each map's chunk HP so every tool
 lands on a whole hit count - a tool that takes 2.2 hits reads as inconsistent, because
