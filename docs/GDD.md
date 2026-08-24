@@ -97,6 +97,11 @@ One tree per map tier, with the map's capstone tool as the deepest node.
 Players choose how their weapon looks/behaves — cosmetic and/or stat variants selected by
 the player, in the style of the genre (skins + modifiers on the same base tool).
 
+Built: seventeen looks across the seven tools, strictly cosmetic (colour, material, and flame
+tint for the fire tools), bought and worn from the WEAPONS tab. Cosmetic-only is the point -
+there is no number in a skin that could reach a swing, so the server validates ownership and
+nothing else.
+
 ---
 
 ## Architecture decisions
@@ -203,16 +208,74 @@ because a find inside solid stonework could never be uncovered.
 Each map tags one Part as its beacon, which the finale lights - "sa se aprinda varful
 priamidei". The cave's is the campfire from its end-state reference.
 
+### AD-8: A map declares its setting, and only the cave is a cave
+
+`MapDef.setting` is either `cave` or `open`. A cave hollows a chamber out of solid rock,
+seals it overhead and lights it entirely from inside. An open map lays a ground slab under
+an open sky - no ceiling, no walls, a horizon lost in fog.
+
+The pyramid and Troy were caves only because the cave needed a chamber and all three maps
+shared one generator. A pyramid is a thing that stands in a desert and Troy is a city; both
+read wrong sealed in rock, and the reference this genre works from (Melt The Ice, ~11K
+likes) puts its ice under a bright open sky on green grass rather than underground.
+
+Three things follow from the split rather than being separate choices:
+
+- **Rebuilding wipes the plot's whole slice first, but only when the map changes.** A plot
+  hosts whichever map its owner is on (AD-5) and the maps differ hugely in size, so
+  switching used to leave the previous one's terrain standing - Troy's rock around a room a
+  fifth of the size, or a cave roof over a desert. It is a big volume to write, so
+  re-freezing the same map skips it; the ordinary fills already overwrite everything that
+  map put down, which is what keeps regeneration idempotent (AD-3).
+- **Fill lights and the spawn lantern are cave-only.** They exist because a sealed chamber
+  has no light of its own. Dropping blue point lights into daylight only flattens it.
+- **`WorldLight` carries two pairs of presets.** The cave keeps its dark-to-daylight arc from
+  the design doc. Outdoors runs cold, hazy and overcast to warm and clear - the same idea of
+  lighting as the progress bar, travelled in a different direction. Which pair is used comes
+  off the player's `CurrentMap` attribute.
+
+The cave stayed a cave and got bigger instead: walkway 12 -> 28 and ceiling gap 8 -> 28, so
+there is room to walk right around the block, hang torches on the walls and look up at
+something. The grid is untouched - growing the ice would have lengthened the first map every
+new player meets, which is where they leave.
+
+### AD-9: Shaped ice is safe because collision does not follow the mesh
+
+Chunks are faceted crystal MeshParts rather than cubes. This was previously off the table:
+chunk Parts are the raycast targets, and the last time their geometry moved - damaged chunks
+shrinking 4% - a ray aimed near a boundary slipped through the gap into the chunk behind and
+mining silently stopped working for anything not hit dead centre.
+
+Raycasts read a MeshPart's **collision** geometry, not its visual mesh. At
+`CollisionFidelity.Box` a crystal is a perfect cube to every ray - measured at 8.000 studs
+dead centre and near a corner, identical to a plain Part - so the shape is free.
+
+The mesh is still constrained, for a different reason. Interior chunks are hidden by going to
+Transparency 1 rather than being destroyed, so all eight corners stay at exactly +-0.5 and
+neighbours meet along their whole shared edge; a pulled-in corner would show through the
+seam, past the invisible chunk, and out into the chamber. Only the face centres recede. The
+generator asserts the unit cube.
+
+### AD-10: Rarity is derived from reward, not stored beside it
+
+Reward is already the "how valuable is this find" axis, so a second hand-maintained rarity
+field would only be a chance for the two to disagree - a legendary worth less than a common
+is the kind of thing nobody notices until a player screenshots it. `Rarity.forReward` reads
+the number; the `hero` flag still floors a map's headline finds at Epic.
+
+One tier then drives the payout multiplier, how loud the reveal is, and the colour the popup,
+the collection log and the quest list all agree on.
+
 ## Settled tuning
 
 Maps are data (`src/shared/MapDefs.luau`). Chunk size is per-map and is what keeps the
 larger maps affordable: Troy is nine times the cave's footprint for about twice the Parts.
 
-| Map | Chunk | Grid | Ice volume | Max chunks | $/chunk | Chunk HP |
-|---|---|---|---|---|---|---|
-| Cave | 4 | 12 x 5 x 12 | 48 x 20 x 48 | 720 | 1 | 30 |
-| Pyramid | 8 | 24 x 4 x 24 | 192 x 32 x 192 | 2304 | 6 | 60 |
-| Troy | 8 | 28 x 4 x 28 | 224 x 32 x 224 | 3136 | 20 | 110 |
+| Map | Setting | Chunk | Grid | Ice volume | Max chunks | $/chunk | Chunk HP |
+|---|---|---|---|---|---|---|---|
+| Cave | cave | 4 | 12 x 5 x 12 | 48 x 20 x 48 | 720 | 1 | 30 |
+| Pyramid | open | 8 | 24 x 4 x 24 | 192 x 32 x 192 | 2304 | 6 | 60 |
+| Troy | open | 8 | 28 x 4 x 28 | 224 x 32 x 224 | 3136 | 20 | 110 |
 
 The later maps are four chunk layers deep rather than five so their landmarks read from the
 spawn. At 40 studs of ice only the Parthenon's roof cleared the surface and it looked like a
@@ -246,11 +309,38 @@ Other settled values:
 | Stamina | 100 base, +12/s | Baseline; upgrades move it per player |
 | Fuel | 72 base, +9/s | Tuned so the torch beats the stone *sustained*, not just per swing |
 
+## Keeping at it
+
+Four systems sit on top of the melt loop, all server-authoritative.
+
+**Combo.** Any swing that *connects* extends a streak; five seconds of nothing drops it. The
+streak multiplies chunk income up to double at fifty.
+
+Connecting rather than breaking had to be measured. The stone costs 24 stamina against a 100
+bar regenerating at 12/s, so it swings about every two seconds and breaks a 30 HP chunk about
+every six. Keyed to breaks with a 3.5s window the streak was mathematically unreachable with
+the starting tool - peak 0 over sixty swings - which is exactly when a player most needs the
+encouragement. Keyed to connections at 5s it reaches 19 in nine seconds. Burn ticks
+deliberately do not extend it, or a torch would hold a streak for one click.
+
+**Rarity.** Five tiers (see AD-10) multiplying payout from 1.0x to 2.0x and scaling the whole
+reveal - sparks, colour, shake, pitch, how long the banner holds.
+
+**Collection and quests.** Every find is counted and kept. Three quests are active at a time
+and rotate daily; the rotation is derived from the day number rather than stored and
+replicated, so every server and client agrees on today's set without anyone sending it.
+Progress carries the day it was earned on and is dropped when that is not today, which is the
+whole of the rotation logic. Rewards are flat rather than map-scaled, so a quest is worth
+doing early and fades into irrelevance by Troy - which is what stops it becoming the optimal
+way to earn.
+
+**Rebirth.** Needs the final map actually cleared, which needs its own flag: clearing a map
+unlocks the *next* one, so the last map being unlocked only means the one before it was
+finished. Wipes upgrades, tools and unlocks; keeps skins, the collection log and the count.
+Worth a flat 25% income each, additive - so the tenth still matters and the fortieth does not
+break the economy.
+
 ## Still open
 
 - **Monetization** — gamepasses / dev products aren't in the source doc but are the norm for
   this genre. Out of scope until asked.
-Weapon customization is built: seventeen looks across the seven tools, strictly cosmetic
-(colour, material, and flame tint for the fire tools), bought and worn from the WEAPONS tab.
-Cosmetic-only is the point - there is no number in a skin that could reach a swing, so the
-server validates ownership and nothing else.

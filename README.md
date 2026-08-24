@@ -22,14 +22,21 @@ file-format only, so they have to be declared there or they simply do not exist.
 
 | Module | Owns |
 |---|---|
-| `shared/MapDefs` | The three maps as data: volume, grid, palette, props, tools, payout |
+| `shared/MapDefs` | The three maps as data: setting, volume, grid, palette, props, payout |
+| `shared/Rarity` | Five tiers, derived from a find's reward rather than stored |
+| `shared/Quests` | The quest pool, and today's three derived from the day number |
+| `shared/IceAssets` | The three chunk meshes, and the rule that keeps them tiling |
 | `shared/Tools` | Per-tool damage, reach, cooldown, gate, area and burn |
 | `shared/Upgrades` | The tree: costs, prerequisites, and what each level does |
 | `shared/Feel` | Presentation only: shake, particles, sound ids, timings, palette |
 | `shared/Config` | The little that is genuinely global: plot pool, gate baselines |
 | `server/MeltService` | The single place a swing turns into melted ice |
+| `server/Combo` | The streak, and the only thing that multiplies chunk income |
+| `server/SetPieces` | Landmarks and dressing: torches, braziers, timbers, palms |
 | `server/IceField` | The chunk grid for whichever map a plot is hosting |
 | `server/Discoveries` | What is buried, and uncovering it |
+| `client/UITheme` | The whole interface's look, in one place |
+| `client/Codex` | Collection log, today's quests, rebirth |
 | `client/*` | Input and presentation. Never decides an outcome. |
 
 ## Working on it
@@ -88,6 +95,7 @@ python tools/upload_assets.py build/models.fbx "MeltAllTheIce Models"
 | File | Holds |
 |---|---|
 | `assets/blender/props.py` | The 16 finds buried in the ice, plus the shared primitive kit |
+| `assets/blender/ice.py` | The chunk itself: three faceted crystal blocks |
 | `assets/blender/tools.py` | The 7 tools, most as a haft and a head |
 | `assets/blender/structures.py` | Pyramid, Parthenon, acropolis, hut, causeway, campfire, spawn dais |
 | `assets/blender/build.py` | Combines all three, lays them out, exports, dumps, renders |
@@ -114,9 +122,15 @@ Three things that will bite otherwise:
   a box with independently sized ends — the one thing a frustum cannot do, because it scales
   both cross-section axes together and a blade is *taller and thinner* at the edge.
 
-Some things stay Parts on purpose: the ice chunks (they are the raycast and HP units, and
-there are thousands of them), the finale beacons (the finale swaps them to Neon and hangs a
-light on them) and the tool flames (same reason, plus they are tinted per skin).
+Some things stay Parts on purpose: the finale beacons (the finale swaps them to Neon and
+hangs a light on them) and every flame - tool, torch and brazier - which has to glow, cast
+light and emit, none of which survives an FBX.
+
+The ice chunks are meshes now, and the reason that is safe is worth knowing before touching
+them: raycasts read a MeshPart's *collision* geometry, so at `CollisionFidelity.Box` a
+crystal is a perfect cube to every ray no matter how it looks. The mesh is still constrained
+to keep all eight corners at exactly the cell extent - interior chunks are hidden rather than
+destroyed, and a pulled-in corner would show straight through the seam. See AD-9.
 
 Credentials live in `.env` (gitignored — never commit the key):
 
