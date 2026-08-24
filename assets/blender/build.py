@@ -24,6 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
+import ice  # noqa: E402
 import props  # noqa: E402
 import structures  # noqa: E402
 import tools  # noqa: E402
@@ -42,6 +43,8 @@ def build_groups():
         groups.append(("tool:" + name, [builder() for builder in builders]))
     for name, builders in sorted(structures.STRUCTURE_GROUPS.items()):
         groups.append(("structure:" + name, [builder() for builder in builders]))
+    for name, builders in sorted(ice.ICE_GROUPS.items()):
+        groups.append(("ice:" + name, [builder() for builder in builders]))
 
     # March along X, spacing by each group's own footprint.
     cursor = 0.0

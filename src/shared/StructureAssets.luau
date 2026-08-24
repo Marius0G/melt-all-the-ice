@@ -27,6 +27,14 @@ local MODELS: { [string]: StructureDef } = {
 		meshId = "rbxassetid://100349064213884",
 		size = Vector3.new(104.000, 18.000, 115.200),
 	},
+	boulder = {
+		meshId = "rbxassetid://115535085724856",
+		size = Vector3.new(4.884, 3.175, 3.573),
+	},
+	brazier = {
+		meshId = "rbxassetid://129207344684821",
+		size = Vector3.new(2.240, 3.031, 2.130),
+	},
 	campfire = {
 		meshId = "rbxassetid://117520455416288",
 		size = Vector3.new(5.958, 1.446, 5.979),
@@ -39,6 +47,10 @@ local MODELS: { [string]: StructureDef } = {
 		meshId = "rbxassetid://108635275617789",
 		size = Vector3.new(8.950, 10.800, 9.600),
 	},
+	palm = {
+		meshId = "rbxassetid://113602670998211",
+		size = Vector3.new(12.140, 12.258, 12.452),
+	},
 	parthenon = {
 		meshId = "rbxassetid://120447867815477",
 		size = Vector3.new(80.000, 44.000, 40.000),
@@ -50,6 +62,14 @@ local MODELS: { [string]: StructureDef } = {
 	spawnpad = {
 		meshId = "rbxassetid://90078146166774",
 		size = Vector3.new(8.600, 1.205, 8.600),
+	},
+	timber = {
+		meshId = "rbxassetid://96041284861257",
+		size = Vector3.new(9.200, 9.060, 0.920),
+	},
+	walltorch = {
+		meshId = "rbxassetid://103541046928360",
+		size = Vector3.new(0.880, 2.575, 1.592),
 	},
 }
 

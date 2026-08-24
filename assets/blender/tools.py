@@ -22,23 +22,7 @@ tool's objects out together so their relative positions survive the export.
 import bpy
 import math
 
-from props import blade, box, cone, cylinder, frustum, join, sphere
-
-
-def torus(name, major, minor, location=(0, 0, 0), rotation=None, major_segments=8, minor_segments=5):
-    """A ring. Chain links are the one shape the box-and-cylinder kit cannot fake."""
-    bpy.ops.mesh.primitive_torus_add(
-        major_radius=major,
-        minor_radius=minor,
-        major_segments=major_segments,
-        minor_segments=minor_segments,
-        location=location,
-    )
-    obj = bpy.context.active_object
-    obj.name = name
-    if rotation:
-        obj.rotation_euler = [math.radians(a) for a in rotation]
-    return obj
+from props import blade, box, cone, cylinder, frustum, join, sphere, torus
 
 
 # ---------------------------------------------------------------------------

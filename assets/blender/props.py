@@ -86,6 +86,22 @@ def frustum(name, radius1, radius2, depth, location=(0, 0, 0), rotation=None,
     return _finish(name, location, rotation, scale)
 
 
+def torus(name, major, minor, location=(0, 0, 0), rotation=None, major_segments=8, minor_segments=5):
+    """A ring. Chain links are the one shape the box-and-cylinder kit cannot fake."""
+    bpy.ops.mesh.primitive_torus_add(
+        major_radius=major,
+        minor_radius=minor,
+        major_segments=major_segments,
+        minor_segments=minor_segments,
+        location=location,
+    )
+    obj = bpy.context.active_object
+    obj.name = name
+    if rotation:
+        obj.rotation_euler = [math.radians(a) for a in rotation]
+    return obj
+
+
 def blade(name, near, far):
     """A box with independently sized ends, built from explicit vertices.
 

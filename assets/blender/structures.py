@@ -18,7 +18,7 @@ deliberately absent from these meshes and added on top in Luau.
 import bpy
 import math
 
-from props import box, cone, cylinder, join, sphere
+from props import box, cone, cylinder, frustum, join, sphere, torus
 
 
 def prism(name, radius, depth, location=(0, 0, 0), rotation=None, verts=3):
@@ -232,6 +232,98 @@ def build_spawn_pad():
     return join("Structure_SpawnPad", parts)
 
 
+# ---------------------------------------------------------------------------
+# dressing - the pieces that make a room feel occupied rather than generated
+# ---------------------------------------------------------------------------
+
+def build_wall_torch():
+    """Bracket torch for the cave walls.
+
+    Authored against a wall at Y = 0 with the bracket rising along +Z and the
+    bowl reaching out to +Y, so placing one is a matter of facing it away from
+    the rock. The flame is a Part added in Luau, same as the tools and beacons -
+    it has to be tinted, lit and emitted from, and none of that survives a mesh.
+    """
+    parts = [box("plate", scale=(0.34, 0.09, 0.75), location=(0, 0.09, 0.75))]
+    parts.append(box("peg", scale=(0.12, 0.16, 0.12), location=(0, 0.3, 1.35)))
+    # Arm angled up and out. -45 about X tips the cylinder's axis toward +Y.
+    parts.append(cylinder("arm", radius=0.13, depth=1.5, location=(0, 0.62, 1.72),
+                          rotation=(-45, 0, 0), verts=6))
+    parts.append(frustum("bowl", radius1=0.16, radius2=0.44, depth=0.55,
+                         location=(0, 1.15, 2.3), verts=8))
+    return join("Structure_WallTorch", parts)
+
+
+def build_brazier():
+    """Standing fire bowl, about 3 studs tall - the cave's floor lighting."""
+    parts = []
+    for index in range(3):
+        angle = index * (math.pi * 2 / 3)
+        parts.append(cylinder("leg%d" % index, radius=0.16, depth=2.4,
+                              location=(math.cos(angle) * 0.5, math.sin(angle) * 0.5, 1.15),
+                              rotation=(12, 0, math.degrees(angle) + 90), verts=5))
+    parts.append(frustum("bowl", radius1=0.45, radius2=1.05, depth=0.8,
+                         location=(0, 0, 2.5), verts=10))
+    parts.append(torus("rim", major=1.02, minor=0.1, location=(0, 0, 2.88),
+                       major_segments=10, minor_segments=4))
+    parts.append(box("coals", scale=(0.72, 0.72, 0.1), location=(0, 0, 2.62)))
+    return join("Structure_Brazier", parts)
+
+
+def build_timber():
+    """Mine support frame - two posts and a lintel, about 9 studs wide.
+
+    Straight out of the mining games this genre grew from: a tunnel reads as a
+    worked tunnel the moment it has timbering in it, and nothing else on the
+    cave's shopping list does that job as cheaply.
+    """
+    parts = [box("postL", scale=(0.42, 0.42, 4.1), location=(-3.9, 0, 4.1))]
+    parts.append(box("postR", scale=(0.42, 0.42, 4.1), location=(3.9, 0, 4.1)))
+    parts.append(box("lintel", scale=(4.6, 0.46, 0.46), location=(0, 0, 8.6)))
+    # Corner braces, which is what stops it reading as a goalpost.
+    for side in (-1, 1):
+        parts.append(box("brace%d" % (side + 1), scale=(1.0, 0.3, 0.22),
+                         location=(side * 2.9, 0, 7.5),
+                         rotation=(0, 0, 0)))
+        parts.append(box("gusset%d" % (side + 1), scale=(0.22, 0.3, 0.9),
+                         location=(side * 3.9, 0, 7.4)))
+    return join("Structure_Timber", parts)
+
+
+def build_palm():
+    """Date palm, about 14 studs - desert dressing for the pyramid's walkway."""
+    parts = [frustum("trunk", radius1=0.58, radius2=0.34, depth=11.5,
+                     location=(0, 0, 5.75), verts=7)]
+    # Two segments per frond: the inner one lifts, the outer one falls away.
+    # One straight box per frond read as an umbrella, because a palm frond's
+    # whole shape is the arch. A positive Y rotation drops the tip.
+    for index in range(7):
+        angle = index * (math.pi * 2 / 7)
+        cos, sin = math.cos(angle), math.sin(angle)
+        parts.append(box("frondA%d" % index, scale=(1.5, 0.46, 0.09),
+                         location=(cos * 1.97, sin * 1.97, 11.81),
+                         rotation=(0, -12, math.degrees(angle))))
+        parts.append(box("frondB%d" % index, scale=(1.7, 0.34, 0.07),
+                         location=(cos * 4.75, sin * 4.75, 11.45),
+                         rotation=(0, 26, math.degrees(angle))))
+    for index in range(3):
+        angle = index * (math.pi * 2 / 3) + 0.5
+        parts.append(sphere("date%d" % index, radius=0.3,
+                            location=(math.cos(angle) * 0.55, math.sin(angle) * 0.55, 10.9),
+                            subdiv=1))
+    return join("Structure_Palm", parts)
+
+
+def build_boulder():
+    """A weathered desert rock, about 5 studs - breaks up open sand."""
+    parts = [sphere("mass", radius=2.1, location=(0, 0, 1.5),
+                    scale=(1.3, 1.0, 0.75), subdiv=1)]
+    parts.append(sphere("lump", radius=1.2, location=(1.3, 0.5, 1.0),
+                        scale=(1.0, 0.9, 0.8), subdiv=1))
+    parts.append(sphere("chip", radius=0.7, location=(-1.6, -0.7, 0.6), subdiv=1))
+    return join("Structure_Boulder", parts)
+
+
 STRUCTURE_GROUPS = {
     "pyramid": [build_pyramid],
     "parthenon": [build_parthenon],
@@ -240,4 +332,9 @@ STRUCTURE_GROUPS = {
     "causeway": [build_causeway],
     "campfire": [build_campfire],
     "spawnpad": [build_spawn_pad],
+    "walltorch": [build_wall_torch],
+    "brazier": [build_brazier],
+    "timber": [build_timber],
+    "palm": [build_palm],
+    "boulder": [build_boulder],
 }

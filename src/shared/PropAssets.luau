@@ -45,7 +45,7 @@ local PropAssets = {}
 
 -- The Model asset the meshes came from. Kept for provenance and for re-reading
 -- the ids if the props are ever re-exported.
-PropAssets.MODEL_ASSET_ID = 94177471805323
+PropAssets.MODEL_ASSET_ID = 116385322258728
 
 local DEFS: { PropDef } = {
 	-- Cave.
