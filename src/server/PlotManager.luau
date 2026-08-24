@@ -132,6 +132,19 @@ local function placeFurniture(plot: Plot)
 	plot.spawn.CFrame = CFrame.new(GridMath.spawnPosition(def, origin) + Vector3.new(0, 0.5, 0))
 
 	plot.glow:ClearAllChildren()
+
+	-- Fill lights exist because a sealed chamber has no light of its own. An
+	-- open map has a sun, and dropping blue point lights into daylight only
+	-- flattens it - so outdoors gets none, and the spawn lantern with it.
+	local outdoors = def.setting == "open"
+	local spawnGlow = plot.spawn:FindFirstChild("SpawnGlow")
+	if spawnGlow and spawnGlow:IsA("PointLight") then
+		spawnGlow.Enabled = not outdoors
+	end
+	if outdoors then
+		return
+	end
+
 	local spots = fillPositions(def, origin)
 	local across = math.clamp(math.ceil(ice.X / 80), 1, 3)
 	-- Each light only has to cover its own cell of the grid, plus overlap.

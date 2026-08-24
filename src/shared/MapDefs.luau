@@ -27,12 +27,23 @@ export type PropEntry = {
 	count: number,
 }
 
+-- Where a map sits in the world.
+--
+--   "cave"  hollows a chamber out of solid rock, sealed overhead, and is lit
+--           entirely from inside. The lighting arc runs dark to bright.
+--   "open"  lays a ground slab under an open sky and has no ceiling and no
+--           walls at all. A pyramid buried in a cave was never right - it is a
+--           thing that stands in a desert - and Troy is a city. Their arc runs
+--           cold and hazy to warm and clear instead.
+export type MapSetting = "cave" | "open"
+
 export type MapDef = {
 	id: string,
 	label: string,
 	order: number,
 
 	-- Geometry. grid is a count of chunks per axis, not studs.
+	setting: MapSetting,
 	chunkSize: number,
 	grid: Vector3,
 	relief: number, -- how many chunk layers the top may be eaten away by
@@ -70,11 +81,17 @@ local DEFS: { MapDef } = {
 		-- at the larger size it was not: ~1150 chunks at three stone hits each,
 		-- gated by stamina to roughly half a chunk a second, is over half an hour
 		-- to clear. This lands nearer fifteen minutes and still reads as a room.
+		-- The room grew; the ice did not. "Bigger cave" is about the space
+		-- feeling like a place rather than a box - there is now room to walk
+		-- right around the block, put torches and braziers on the walls, and
+		-- look up at something. Growing the ice instead would have lengthened
+		-- the first map every new player meets, which is where they drop off.
+		setting = "cave",
 		chunkSize = 4,
 		grid = Vector3.new(12, 5, 12),
 		relief = 3,
-		walkway = 12,
-		ceilingGap = 8,
+		walkway = 28,
+		ceilingGap = 28,
 		shell = 8,
 		shellMaterial = Enum.Material.Rock,
 
@@ -111,6 +128,7 @@ local DEFS: { MapDef } = {
 		-- from the spawn, and at 40 studs of ice only the pyramid's very top
 		-- cleared it. At 32 nearly half of it stands out. The ceiling gap grows
 		-- to match so the capstone still has air above it.
+		setting = "open",
 		chunkSize = 8,
 		grid = Vector3.new(24, 4, 24),
 		relief = 2,
@@ -146,6 +164,7 @@ local DEFS: { MapDef } = {
 		-- of ice only the Parthenon's roof showed and it read as a grey lump.
 		-- At 32 the top of the colonnade clears the surface, so it is legibly a
 		-- temple from the moment you arrive.
+		setting = "open",
 		chunkSize = 8,
 		grid = Vector3.new(28, 4, 28),
 		relief = 2,

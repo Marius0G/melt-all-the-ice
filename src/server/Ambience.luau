@@ -4,7 +4,7 @@
 
 	Terrain material colours are one setting shared by every player, so they
 	belong on the server. Everything else about lighting moved to the client
-	(see CaveLight): Lighting is a global service in the same way Terrain is,
+	(see WorldLight): Lighting is a global service in the same way Terrain is,
 	and the cave has to look different to each player depending on how far
 	through their own map they are, which the server cannot express.
 

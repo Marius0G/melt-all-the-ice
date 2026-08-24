@@ -66,6 +66,9 @@ export type IceField = {
 	grid: { [number]: Chunk }, -- linear cell index -> chunk, for neighbour lookups
 	total: number,
 	destroyed: number,
+	-- Which map's terrain is currently standing here, so a rebuild can tell
+	-- whether it needs to wipe the plot first. nil means nothing is laid down.
+	builtAs: string?,
 }
 
 local IceField = {}
@@ -223,14 +226,28 @@ function IceField.build(field: IceField, def: MapDefs.MapDef?)
 	local map = field.def
 	local origin = field.origin
 
-	-- Shell -> hollow the chamber. Running both unconditionally is what makes
-	-- regeneration idempotent: whatever the player carved out gets overwritten
-	-- rather than patched. No ice is filled - the Parts are the ice.
-	local shellCenter, shellSize = GridMath.shellBox(map, origin)
-	fill(shellCenter, shellSize, map.shellMaterial)
+	-- Swapping a plot onto a different map has to wipe what the last one left,
+	-- and only then, because the bounds are a big volume to write. Re-freezing
+	-- the same map skips it: the fills below already overwrite everything that
+	-- map put down, which is what makes regeneration idempotent (AD-3).
+	if field.builtAs ~= map.id then
+		local boundsCenter, boundsSize = GridMath.plotBounds(map, origin)
+		fill(boundsCenter, boundsSize, Enum.Material.Air)
+	end
 
-	local chamberCenter, chamberSize = GridMath.chamberBox(map, origin)
-	fill(chamberCenter, chamberSize, Enum.Material.Air)
+	if map.setting == "open" then
+		-- No shell, no ceiling. Just ground, under the sky.
+		local groundCenter, groundSize = GridMath.groundBox(map, origin)
+		fill(groundCenter, groundSize, map.shellMaterial)
+	else
+		-- Solid rock, then hollow the chamber out of it.
+		local shellCenter, shellSize = GridMath.shellBox(map, origin)
+		fill(shellCenter, shellSize, map.shellMaterial)
+
+		local chamberCenter, chamberSize = GridMath.chamberBox(map, origin)
+		fill(chamberCenter, chamberSize, Enum.Material.Air)
+	end
+	field.builtAs = map.id
 
 	-- Drop anything that survived the previous run, then lay a fresh grid.
 	field.folder:ClearAllChildren()
@@ -313,8 +330,17 @@ function IceField.clear(field: IceField)
 	field.total = 0
 	field.destroyed = 0
 
-	local shellCenter, shellSize = GridMath.shellBox(field.def, field.origin)
-	fill(shellCenter, shellSize, field.def.shellMaterial)
+	-- A cave gets sealed back up so an idle plot is not a hole in the rock. An
+	-- open map has no hole to seal: leaving the ground is both correct and
+	-- cheaper than filling a slab solid.
+	if field.def.setting ~= "open" then
+		local shellCenter, shellSize = GridMath.shellBox(field.def, field.origin)
+		fill(shellCenter, shellSize, field.def.shellMaterial)
+	end
+	-- builtAs deliberately survives a clear. The plot still holds this map's
+	-- terrain footprint - sealed rather than hollow - so rebuilding the same
+	-- map only has to re-carve the chamber, and only a *different* map needs
+	-- the full wipe.
 end
 
 -- `build` is optional so a plot can exist before it is worth building.
@@ -332,6 +358,7 @@ function IceField.new(index: number, def: MapDefs.MapDef, build: boolean?): IceF
 		grid = {},
 		total = 0,
 		destroyed = 0,
+		builtAs = nil,
 	}
 
 	if build ~= false then

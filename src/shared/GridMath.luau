@@ -10,7 +10,14 @@
 	    chamber   air; ice volume + walkway on X/Z + ceilingGap on top
 	    ice       grid.X x grid.Y x grid.Z chunks of def.chunkSize studs
 
-	A plot's origin is the minimum corner of its ice volume.
+	That is the "cave" setting. An "open" map has no shell and no chamber at
+	all - just a ground slab whose top face is the same floor, under an open
+	sky:
+
+	    ground    a slab reaching walkway + apron past the ice on X and Z
+	    ice       sitting on top of it, with nothing overhead
+
+	A plot's origin is the minimum corner of its ice volume, either way.
 
 	Every function takes the map definition rather than reading globals (AD-4),
 	because a plot hosts whichever map its owner is on (AD-5) and two plots on
@@ -24,6 +31,24 @@ local Config = require(Shared:WaitForChild("Config"))
 local MapDefs = require(Shared:WaitForChild("MapDefs"))
 
 local GridMath = {}
+
+-- How far an open map's ground reaches past its walkway, and how far down it
+-- goes. Not MapDef fields: it is the same "far enough that the edge is lost in
+-- the fog rather than reading as a platform" number for any outdoor map.
+local OPEN_APRON = 120
+local OPEN_DEPTH = 48
+
+-- The slice of the world a plot owns. Rebuilding clears this before laying
+-- anything down, because a plot hosts whichever map its owner is on (AD-5) and
+-- the maps are wildly different sizes - going from Troy to the cave without
+-- this leaves Troy's rock standing around a room a fifth of the size, and going
+-- from the cave to the pyramid leaves a cave roof over a desert.
+--
+-- Sized to contain the largest of either kind and to stay well inside
+-- PLOT_SPACING, so no two plots ever touch.
+local BOUNDS_XZ = 560
+local BOUNDS_BELOW = 96
+local BOUNDS_ABOVE = 176
 
 -- Full size of the meltable ice volume, in studs.
 function GridMath.iceSize(def: MapDefs.MapDef): Vector3
@@ -94,6 +119,27 @@ function GridMath.shellBox(def: MapDefs.MapDef, origin: Vector3): (Vector3, Vect
 	local center, size = GridMath.chamberBox(def, origin)
 	local s = def.shell * 2
 	return center, size + Vector3.new(s, s, s)
+end
+
+-- The ground an open map stands on. Its top face is the floor - the same plane
+-- the ice sits on and the same one chamberBox uses - so nothing else has to
+-- know which kind of map it is looking at.
+function GridMath.groundBox(def: MapDefs.MapDef, origin: Vector3): (Vector3, Vector3)
+	local ice = GridMath.iceSize(def)
+	local reach = def.walkway + OPEN_APRON
+	local size = Vector3.new(ice.X + reach * 2, OPEN_DEPTH, ice.Z + reach * 2)
+	local min = origin - Vector3.new(reach, OPEN_DEPTH, reach)
+	return min + size / 2, size
+end
+
+-- Everything a rebuild is allowed to overwrite. See the note above.
+function GridMath.plotBounds(def: MapDefs.MapDef, origin: Vector3): (Vector3, Vector3)
+	local ice = GridMath.iceSize(def)
+	local size = Vector3.new(BOUNDS_XZ, BOUNDS_BELOW + BOUNDS_ABOVE, BOUNDS_XZ)
+	-- Centred on the ice on X/Z rather than on the origin corner.
+	local center = origin
+		+ Vector3.new(ice.X / 2, (BOUNDS_ABOVE - BOUNDS_BELOW) / 2, ice.Z / 2)
+	return center, size
 end
 
 -- Standing spot on the -X walkway strip, level with the chamber floor and
