@@ -23,7 +23,9 @@ local PlayerStats = require(modules:WaitForChild("PlayerStats"))
 local PlotManager = require(modules:WaitForChild("PlotManager"))
 local Progression = require(modules:WaitForChild("Progression"))
 local SaveService = require(modules:WaitForChild("SaveService"))
+local SetPieces = require(modules:WaitForChild("SetPieces"))
 local ShopService = require(modules:WaitForChild("ShopService"))
+local ToolService = require(modules:WaitForChild("ToolService"))
 
 -- Characters load only once a plot is reserved, so nobody spawns adrift at the
 -- world origin while allocation is still in flight.
@@ -53,11 +55,26 @@ end
 PhysicsService:CollisionGroupSetCollidable(SHARD_GROUP, SHARD_GROUP, false)
 PhysicsService:CollisionGroupSetCollidable(SHARD_GROUP, "Default", true)
 
--- Prop meshes first, together, so plot building is not serialised behind seven
--- separate asset fetches.
+-- Every mesh first, and all of them together. These yield on network round
+-- trips, so fetching them lazily during the first plot build serialises the
+-- whole startup behind one request at a time.
 local meshStart = os.clock()
-Discoveries.preload()
-print(string.format("[MeltAllTheIce] loaded prop meshes in %.2fs", os.clock() - meshStart))
+local pending = 3
+local ready = Instance.new("BindableEvent")
+for _, load in { Discoveries.preload, ToolService.preload, SetPieces.preload } do
+	task.spawn(function()
+		load()
+		pending -= 1
+		if pending == 0 then
+			ready:Fire()
+		end
+	end)
+end
+if pending > 0 then
+	ready.Event:Wait()
+end
+ready:Destroy()
+print(string.format("[MeltAllTheIce] loaded meshes in %.2fs", os.clock() - meshStart))
 
 local buildStart = os.clock()
 PlotManager.init()

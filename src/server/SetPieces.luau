@@ -4,37 +4,43 @@
 
 	The design doc does not describe three ice blocks. It describes starting in a
 	town beside a pyramid and working toward it, and a Parthenon and a horse at
-	Troy. Those are the things the maps are *about*, so they are built here as
-	static Parts and placed on the ice footprint, taller than the ice: the top
-	stands clear from the moment you spawn, so there is something to work toward,
-	and the bulk is encased, so clearing the map is what uncovers it.
+	Troy. Those are the things the maps are *about*, so they are placed on the
+	ice footprint and built taller than the ice: the top stands clear from the
+	moment you spawn, so there is something to work toward, and the bulk is
+	encased, so clearing the map is what uncovers it.
 
-	Three rules this module has to obey, all of them learned the hard way from
-	how the rest of the plot is wired:
+	These are Blender meshes now (assets/blender/structures.py, ids in
+	StructureAssets). The Parthenon alone was fifty-four Parts positioned by
+	arithmetic and is one mesh with real fluted columns and a proper gable.
 
-	  * These Parts must never be parented into the ice folder. MeltService
-	    raycasts with an Include filter scoped to exactly that folder, so anything
-	    living there becomes a melt target, fails IceField.cellOf, and silently
-	    swallows swings - and IceField.build clears that folder anyway. They get
-	    their own, which also means CanQuery cannot bite us. It is set false
-	    regardless, matching props, glow anchors and shards.
+	Three rules this module has to obey, all learned from how the rest of the
+	plot is wired:
+
+	  * These parts must never be parented into the ice folder. MeltService
+	    raycasts with an Include filter scoped to exactly that folder, so
+	    anything living there becomes a melt target, fails IceField.cellOf, and
+	    silently swallows swings - and IceField.build clears that folder anyway.
+	    They get their own, which also means CanQuery cannot bite us. It is set
+	    false regardless, matching props, glow anchors and shards.
 	  * The folder is cleared at the head of every build and again on release.
 	    IceField.clear refills the whole shell solid with terrain, so anything
 	    left behind ends up entombed on an idle plot and then reappears inside
 	    whatever map the next player loads.
-	  * Every Part here exists once per plot, so six times over. The budgets are
-	    deliberately small: tens of Parts per map, not hundreds.
+	  * Everything here exists once per plot, so six times over.
 
-	Landmarks also report the volume they occupy, so buried finds can avoid being
-	scattered inside solid stone where nothing could ever uncover them.
+	Landmarks report the volume they occupy, so buried finds are not scattered
+	inside solid stone where nothing could ever uncover them.
 ]]
 
+local AssetService = game:GetService("AssetService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GridMath = require(Shared:WaitForChild("GridMath"))
 local MapDefs = require(Shared:WaitForChild("MapDefs"))
+local PropAssets = require(Shared:WaitForChild("PropAssets"))
+local StructureAssets = require(Shared:WaitForChild("StructureAssets"))
 
 export type Solid = {
 	min: Vector3,
@@ -50,44 +56,70 @@ local SetPieces = {}
 
 local BEACON_ATTRIBUTE = "Beacon"
 
--- Static architecture wants different defaults from tool parts: anchored and
--- solid, never a query target, never casting shadows (nothing else in the
--- chamber does, and these are the largest things in it).
-local function piece(
-	folder: Folder,
-	name: string,
-	size: Vector3,
-	cframe: CFrame,
-	color: Color3,
-	material: Enum.Material
-): Part
-	local part = Instance.new("Part")
-	part.Name = name
-	part.Size = size
-	part.CFrame = cframe
-	part.Color = color
-	part.Material = material
-	part.Anchored = true
-	part.CanCollide = true
-	part.CanQuery = false
-	part.CanTouch = false
-	part.CastShadow = false
-	part.TopSurface = Enum.SurfaceType.Smooth
-	part.BottomSurface = Enum.SurfaceType.Smooth
-	part.Parent = folder
-	return part
+local templates: { [string]: BasePart } = {}
+
+local function loadMesh(meshId: string, fidelity: Enum.CollisionFidelity): BasePart?
+	local existing = templates[meshId]
+	if existing then
+		return existing
+	end
+	local ok, result = pcall(function()
+		return AssetService:CreateMeshPartAsync(Content.fromUri(meshId), {
+			CollisionFidelity = fidelity,
+			RenderFidelity = Enum.RenderFidelity.Automatic,
+		})
+	end)
+	if not ok or not result then
+		warn(string.format("[MeltAllTheIce] could not load structure mesh %s: %s", meshId, tostring(result)))
+		return nil
+	end
+	local mesh = result :: MeshPart
+	mesh.Parent = nil
+	templates[meshId] = mesh
+	return mesh
 end
 
--- The one Part the finale lights. Exactly one per map.
-local function markBeacon(part: Part)
-	part:SetAttribute(BEACON_ATTRIBUTE, true)
-end
+-- Fetch every structure mesh up front, concurrently. Same reason as the props
+-- and the tools: lazily, one at a time, this is seconds of dead server start.
+function SetPieces.preload()
+	local wanted: { { id: string, fidelity: Enum.CollisionFidelity } } = {}
+	for key, def in StructureAssets.MODELS do
+		-- The pyramid really is convex, so a hull is both correct and cheap.
+		-- Everything else is close enough to its own bounding box.
+		local fidelity = if key == "pyramid"
+			then Enum.CollisionFidelity.Hull
+			elseif key == "parthenon" then Enum.CollisionFidelity.Default
+			else Enum.CollisionFidelity.Box
+		table.insert(wanted, { id = def.meshId, fidelity = fidelity })
+	end
+	-- The Trojan horse is a find mesh reused at landmark scale.
+	local horse = PropAssets.get("TrojanHorse")
+	if horse then
+		table.insert(wanted, { id = horse.meshId, fidelity = Enum.CollisionFidelity.Hull })
+	end
+	local spike = PropAssets.get("Stalagmite")
+	if spike then
+		table.insert(wanted, { id = spike.meshId, fidelity = Enum.CollisionFidelity.Box })
+	end
 
-local function addSolid(field: Field, centre: Vector3, size: Vector3)
-	table.insert(field.solids, {
-		min = centre - size / 2,
-		max = centre + size / 2,
-	})
+	if #wanted == 0 then
+		return
+	end
+	local completed = 0
+	local signal = Instance.new("BindableEvent")
+	for _, entry in wanted do
+		task.spawn(function()
+			loadMesh(entry.id, entry.fidelity)
+			completed += 1
+			if completed == #wanted then
+				signal:Fire()
+			end
+		end)
+	end
+	if completed < #wanted then
+		signal.Event:Wait()
+	end
+	signal:Destroy()
 end
 
 local function shade(color: Color3, amount: number): Color3
@@ -97,47 +129,114 @@ local function shade(color: Color3, amount: number): Color3
 	return color:Lerp(Color3.new(0, 0, 0), -amount)
 end
 
--- ---------------------------------------------------------------------------
--- shared dressing
--- ---------------------------------------------------------------------------
+-- Place a mesh with its base sitting on `floor`. Every structure is modelled
+-- standing on its own base, so this is the only placement rule needed.
+local function place(
+	field: Field,
+	meshId: string,
+	name: string,
+	size: Vector3,
+	footing: Vector3,
+	color: Color3,
+	material: Enum.Material,
+	rotation: number?
+): BasePart?
+	local template = templates[meshId]
+	if not template then
+		return nil
+	end
+	local part = template:Clone()
+	part.Name = name
+	part.Size = size
+	part.CFrame = CFrame.new(footing + Vector3.new(0, size.Y / 2, 0))
+		* CFrame.Angles(0, rotation or 0, 0)
+	part.Color = color
+	part.Material = material
+	part.Anchored = true
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.Parent = field.folder
+	return part
+end
 
--- A cluster of small huts, used for the town beside the pyramid and the agora
--- at Troy. Placed in the walkway ring, which is the only floor not under ice.
-local function buildHuts(field: Field, map: MapDefs.MapDef, origin: Vector3, count: number, stone: Color3)
+-- A plain Part, for the few things that cannot be a mesh - chiefly the beacon,
+-- which the finale has to swap to Neon and hang a light on.
+local function block(
+	field: Field,
+	name: string,
+	size: Vector3,
+	position: Vector3,
+	color: Color3,
+	material: Enum.Material
+): Part
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Size = size
+	part.CFrame = CFrame.new(position)
+	part.Color = color
+	part.Material = material
+	part.Anchored = true
+	part.CanCollide = true
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.Parent = field.folder
+	return part
+end
+
+local function markBeacon(part: BasePart)
+	part:SetAttribute(BEACON_ATTRIBUTE, true)
+end
+
+local function addSolid(field: Field, centre: Vector3, size: Vector3)
+	table.insert(field.solids, { min = centre - size / 2, max = centre + size / 2 })
+end
+
+-- The dais the player materialises on, so the spawn is not a bare grey square.
+local function placeSpawnPad(field: Field, map: MapDefs.MapDef, origin: Vector3, stone: Color3)
+	local def = StructureAssets.get("spawnpad")
+	if not def then
+		return
+	end
+	place(
+		field,
+		def.meshId,
+		"SpawnPad",
+		def.size,
+		GridMath.spawnPosition(map, origin),
+		shade(stone, -0.15),
+		Enum.Material.Slate
+	)
+end
+
+-- Small houses along the walkway ring, which is the only floor not under ice.
+local function placeHuts(field: Field, map: MapDefs.MapDef, origin: Vector3, count: number, stone: Color3)
+	local def = StructureAssets.get("hut")
+	if not def then
+		return
+	end
 	local ice = GridMath.iceSize(map)
-	local strip = map.walkway
-	local roof = shade(stone, -0.35)
-
 	for index = 0, count - 1 do
-		-- Spread along the -X strip, skipping the middle where the spawn pad and
-		-- its light sit.
 		local t = (index + 0.5) / count
 		local z = ice.Z * t
-		local nearSpawn = math.abs(z - ice.Z / 2) < 14
-		if nearSpawn then
+		-- Leave the middle of the strip clear for the spawn pad and its light.
+		if math.abs(z - ice.Z / 2) < 16 then
 			continue
 		end
-
-		local width = 7 + (index % 3) * 2
-		local height = 6 + (index % 2) * 2
-		local x = -strip * (0.35 + (index % 2) * 0.28)
-		local base = origin + Vector3.new(x, 0, z)
-
-		piece(
-			field.folder,
+		local scale = 0.85 + (index % 3) * 0.18
+		local x = -map.walkway * (0.34 + (index % 2) * 0.3)
+		place(
+			field,
+			def.meshId,
 			"Hut",
-			Vector3.new(width, height, width),
-			CFrame.new(base + Vector3.new(0, height / 2, 0)),
-			stone,
-			Enum.Material.Sandstone
-		)
-		piece(
-			field.folder,
-			"HutRoof",
-			Vector3.new(width + 1.5, 1.2, width + 1.5),
-			CFrame.new(base + Vector3.new(0, height + 0.6, 0)),
-			roof,
-			Enum.Material.WoodPlanks
+			def.size * scale,
+			origin + Vector3.new(x, 0, z),
+			shade(stone, (index % 2) * 0.08 - 0.04),
+			Enum.Material.Sandstone,
+			math.rad((index % 4) * 90)
 		)
 	end
 end
@@ -146,68 +245,50 @@ end
 -- cave
 -- ---------------------------------------------------------------------------
 
--- No landmark - it is a cave. What it gets is the dressing from the real end
--- state reference: a fire ring on the floor and a stand of stalagmites. The
--- campfire is the map's beacon, unlit until the ice is gone.
 local function buildCave(field: Field, map: MapDefs.MapDef, origin: Vector3)
 	local ice = GridMath.iceSize(map)
 	local stone = map.rockColor
 
-	-- The cave walkway is only 12 studs and the spawn pad already occupies the
-	-- middle of the -X strip, so the fire goes along the same strip well clear
-	-- of the pad and of the fill light directly above it.
-	local hearth = origin + Vector3.new(-map.walkway * 0.5, 0, ice.Z * 0.18)
+	placeSpawnPad(field, map, origin, stone)
 
-	for index = 0, 7 do
-		local angle = index * (math.pi * 2 / 8)
-		piece(
-			field.folder,
-			"FireStone",
-			Vector3.new(1.6, 1.1, 1.6),
-			CFrame.new(hearth + Vector3.new(math.cos(angle) * 2.6, 0.55, math.sin(angle) * 2.6))
-				* CFrame.Angles(0, angle, 0),
-			shade(stone, -0.2),
-			Enum.Material.Slate
-		)
-	end
-
-	for index = 0, 3 do
-		local angle = index * (math.pi / 2) + 0.4
-		piece(
-			field.folder,
-			"Log",
-			Vector3.new(3.4, 0.7, 0.7),
-			CFrame.new(hearth + Vector3.new(0, 0.9, 0)) * CFrame.Angles(0, angle, math.rad(14)),
-			Color3.fromRGB(96, 66, 38),
-			Enum.Material.Wood
-		)
+	-- The fire ring from the end-state reference, on the -X strip well clear of
+	-- the spawn pad and the fill light directly above it.
+	local hearth = origin + Vector3.new(-map.walkway * 0.5, 0, ice.Z * 0.2)
+	local fire = StructureAssets.get("campfire")
+	if fire then
+		place(field, fire.meshId, "Hearth", fire.size, hearth, shade(stone, -0.2), Enum.Material.Slate)
 	end
 
 	-- Dark until the finale lights it.
-	local embers = piece(
-		field.folder,
+	local embers = block(
+		field,
 		"Campfire",
-		Vector3.new(2.2, 1.2, 2.2),
-		CFrame.new(hearth + Vector3.new(0, 1.3, 0)),
+		Vector3.new(2.0, 1.1, 2.0),
+		hearth + Vector3.new(0, 1.4, 0),
 		Color3.fromRGB(58, 44, 36),
 		Enum.Material.Slate
 	)
 	markBeacon(embers)
 
-	-- A stand of stalagmites in the far corner, so the room has something in it
-	-- other than the ice.
-	local corner = origin + Vector3.new(ice.X + map.walkway * 0.5, 0, ice.Z + map.walkway * 0.5)
-	for index = 0, 4 do
-		local height = 6 + (index % 3) * 3
-		local offset = Vector3.new(math.cos(index * 1.3) * 3.5, height / 2, math.sin(index * 1.3) * 3.5)
-		piece(
-			field.folder,
-			"Stalagmite",
-			Vector3.new(2.2 - (index % 2) * 0.6, height, 2.2 - (index % 2) * 0.6),
-			CFrame.new(corner + offset),
-			shade(stone, 0.1),
-			Enum.Material.Slate
-		)
+	-- A stand of stalagmites in the far corner, reusing the find mesh so the
+	-- cave has something in it besides the ice.
+	local spike = PropAssets.get("Stalagmite")
+	if spike then
+		local corner = origin + Vector3.new(ice.X + map.walkway * 0.45, 0, ice.Z + map.walkway * 0.45)
+		for index = 0, 4 do
+			local scale = 0.9 + (index % 3) * 0.55
+			local offset = Vector3.new(math.cos(index * 1.3) * 4.0, 0, math.sin(index * 1.3) * 4.0)
+			place(
+				field,
+				spike.meshId,
+				"Stalagmite",
+				spike.size * scale,
+				corner + offset,
+				shade(stone, 0.12),
+				Enum.Material.Slate,
+				index * 1.1
+			)
+		end
 	end
 end
 
@@ -220,61 +301,52 @@ local function buildPyramid(field: Field, map: MapDefs.MapDef, origin: Vector3)
 	local sand = map.rockColor
 	local centre = origin + Vector3.new(ice.X / 2, 0, ice.Z / 2)
 
-	-- Has to clear the ice (top 40) and stay under the chamber ceiling (64), or
-	-- the apex ends up buried in the shell where nobody can see it. Courses
-	-- reach 48 and the capstone tops out at 56: sixteen studs of pyramid above
-	-- the ice, eight studs of air above that.
-	local base = 128
-	local steps = 12
-	local stepHeight = 4
+	placeSpawnPad(field, map, origin, sand)
 
-	for index = 0, steps - 1 do
-		local shrink = index / steps
-		local width = base * (1 - shrink * 0.92)
-		piece(
-			field.folder,
-			string.format("Course%d", index),
-			Vector3.new(width, stepHeight, width),
-			CFrame.new(centre + Vector3.new(0, index * stepHeight + stepHeight / 2, 0)),
-			shade(sand, (index % 2) * 0.06),
+	local def = StructureAssets.get("pyramid")
+	if def then
+		place(field, def.meshId, "GreatPyramid", def.size, centre, sand, Enum.Material.Sandstone)
+
+		-- The capstone is the beacon, so it stays a Part the finale can light.
+		local apex = def.size.Y
+		local capstone = block(
+			field,
+			"Capstone",
+			Vector3.new(8, 8, 8),
+			centre + Vector3.new(0, apex + 4, 0),
+			shade(sand, 0.25),
 			Enum.Material.Sandstone
 		)
+		markBeacon(capstone)
+
+		-- Finds must not land inside the stonework, where nothing could ever
+		-- uncover them.
+		addSolid(field, centre + Vector3.new(0, (apex + 8) / 2, 0),
+			Vector3.new(def.size.X, apex + 8, def.size.Z))
 	end
 
-	local apexY = steps * stepHeight
-	local capstone = piece(
-		field.folder,
-		"Capstone",
-		Vector3.new(8, 8, 8),
-		CFrame.new(centre + Vector3.new(0, apexY + 4, 0)),
-		shade(sand, 0.25),
-		Enum.Material.Sandstone
-	)
-	markBeacon(capstone)
-
-	-- Finds must not be scattered inside the stonework, where nothing could ever
-	-- uncover them.
-	addSolid(field, centre + Vector3.new(0, apexY / 2, 0), Vector3.new(base, apexY + 8, base))
-
-	-- A causeway running the length of the town, which is the approach the
-	-- reference image is built around. It breaks around the spawn pad rather
-	-- than through it - the pad is the town square.
-	for index = 0, 5 do
-		local z = ice.Z / 2 - 45 + index * 18
-		if math.abs(z - ice.Z / 2) < 22 then
-			continue
+	-- The approach the reference image is built around, breaking around the
+	-- spawn pad rather than running through it - the pad is the town square.
+	local road = StructureAssets.get("causeway")
+	if road then
+		for index = 0, 5 do
+			local z = ice.Z / 2 - 45 + index * 18
+			if math.abs(z - ice.Z / 2) < 24 then
+				continue
+			end
+			place(
+				field,
+				road.meshId,
+				"Causeway",
+				road.size,
+				origin + Vector3.new(-map.walkway * 0.5, 0, z),
+				shade(sand, -0.12),
+				Enum.Material.Sandstone
+			)
 		end
-		piece(
-			field.folder,
-			"Causeway",
-			Vector3.new(14, 1.5, 18),
-			CFrame.new(origin + Vector3.new(-map.walkway * 0.5, 0.75, z)),
-			shade(sand, -0.1),
-			Enum.Material.Sandstone
-		)
 	end
 
-	buildHuts(field, map, origin, 9, sand)
+	placeHuts(field, map, origin, 9, sand)
 end
 
 -- ---------------------------------------------------------------------------
@@ -286,110 +358,69 @@ local function buildTroy(field: Field, map: MapDefs.MapDef, origin: Vector3)
 	local marble = map.rockColor
 	local centre = origin + Vector3.new(ice.X / 2, 0, ice.Z / 2)
 
+	placeSpawnPad(field, map, origin, marble)
+
 	-- The Parthenon sits on the Acropolis, and that is also what lifts it clear
-	-- of 40 studs of ice without making the building itself absurdly tall.
-	--
-	-- 18, not 26: at 26 the acroterion topped out at 69 against a 68 ceiling and
-	-- the roof was buried in the shell. This puts the apex around 61 - twenty
-	-- studs of temple above the ice, with headroom to spare.
-	local plinthTop = 18
-	for index = 0, 2 do
-		local width = 104 - index * 8
-		piece(
-			field.folder,
-			string.format("Acropolis%d", index),
-			Vector3.new(width, plinthTop / 3, width),
-			CFrame.new(centre + Vector3.new(0, index * (plinthTop / 3) + plinthTop / 6, 0)),
-			shade(marble, -0.18 + index * 0.05),
+	-- of forty studs of ice without making the building itself absurdly tall.
+	-- Squashed to 14: at its authored 18 the roof ornament ended up above the
+	-- chamber ceiling and buried in the shell.
+	local plinthHeight = 14
+	local plinth = StructureAssets.get("acropolis")
+	if plinth then
+		place(
+			field,
+			plinth.meshId,
+			"Acropolis",
+			Vector3.new(plinth.size.X, plinthHeight, plinth.size.Z),
+			centre,
+			shade(marble, -0.2),
 			Enum.Material.Limestone
 		)
 	end
 
-	-- Stepped crepidoma.
-	local length, depth = 72, 34
-	for index = 0, 2 do
-		piece(
-			field.folder,
-			string.format("Step%d", index),
-			Vector3.new(length + 6 - index * 3, 1.6, depth + 6 - index * 3),
-			CFrame.new(centre + Vector3.new(0, plinthTop + index * 1.6 + 0.8, 0)),
+	local temple = StructureAssets.get("parthenon")
+	if temple then
+		place(
+			field,
+			temple.meshId,
+			"Parthenon",
+			temple.size,
+			centre + Vector3.new(0, plinthHeight, 0),
 			marble,
 			Enum.Material.Marble
 		)
-	end
 
-	local floorY = plinthTop + 4.8
-	local columnHeight = 17
-
-	-- Peristyle: a colonnade all the way round, corners shared.
-	local acrossCount, alongCount = 6, 11
-	local acrossGap = (length - 10) / (acrossCount - 1)
-	local alongGap = (depth - 10) / (alongCount - 1)
-	for ax = 0, acrossCount - 1 do
-		for az = 0, alongCount - 1 do
-			local edge = ax == 0 or ax == acrossCount - 1 or az == 0 or az == alongCount - 1
-			if not edge then
-				continue
-			end
-			local x = -(length - 10) / 2 + ax * acrossGap
-			local z = -(depth - 10) / 2 + az * alongGap
-			piece(
-				field.folder,
-				"Column",
-				Vector3.new(3.4, columnHeight, 3.4),
-				CFrame.new(centre + Vector3.new(x, floorY + columnHeight / 2, z)),
-				marble,
-				Enum.Material.Marble
-			)
-		end
-	end
-
-	local entabY = floorY + columnHeight
-	piece(
-		field.folder,
-		"Architrave",
-		Vector3.new(length, 3, depth),
-		CFrame.new(centre + Vector3.new(0, entabY + 1.5, 0)),
-		marble,
-		Enum.Material.Marble
-	)
-	-- The painted frieze is the one bit of colour on the whole building.
-	piece(
-		field.folder,
-		"Frieze",
-		Vector3.new(length + 1, 2.4, depth + 1),
-		CFrame.new(centre + Vector3.new(0, entabY + 4.2, 0)),
-		Color3.fromRGB(72, 96, 150),
-		Enum.Material.Marble
-	)
-
-	-- Stepped gable rather than a wedge: it reads as a pediment at this scale
-	-- and cannot be mis-oriented.
-	for index = 0, 2 do
-		piece(
-			field.folder,
-			string.format("Pediment%d", index),
-			Vector3.new(length - index * 18, 2.6, depth + 1),
-			CFrame.new(centre + Vector3.new(0, entabY + 6.7 + index * 2.6, 0)),
-			shade(marble, 0.05),
+		local roof = plinthHeight + temple.size.Y
+		local acroterion = block(
+			field,
+			"Acroterion",
+			Vector3.new(5, 5, 5),
+			centre + Vector3.new(0, roof + 2.5, 0),
+			shade(marble, 0.15),
 			Enum.Material.Marble
+		)
+		markBeacon(acroterion)
+
+		addSolid(field, centre + Vector3.new(0, (roof + 5) / 2, 0),
+			Vector3.new(plinth and plinth.size.X or 104, roof + 5, plinth and plinth.size.Z or 104))
+	end
+
+	-- The horse itself, at landmark scale rather than the buried find's size.
+	local horse = PropAssets.get("TrojanHorse")
+	if horse then
+		place(
+			field,
+			horse.meshId,
+			"TrojanHorse",
+			horse.size * 2.6,
+			origin + Vector3.new(-map.walkway * 0.45, 0, ice.Z * 0.28),
+			Color3.fromRGB(118, 80, 44),
+			Enum.Material.WoodPlanks,
+			math.rad(-90)
 		)
 	end
 
-	local roofY = entabY + 6.7 + 3 * 2.6
-	local beacon = piece(
-		field.folder,
-		"Acroterion",
-		Vector3.new(7, 7, 7),
-		CFrame.new(centre + Vector3.new(0, roofY + 3.5, 0)),
-		shade(marble, 0.15),
-		Enum.Material.Marble
-	)
-	markBeacon(beacon)
-
-	addSolid(field, centre + Vector3.new(0, (roofY + 7) / 2, 0), Vector3.new(110, roofY + 7, 110))
-
-	buildHuts(field, map, origin, 7, shade(marble, -0.25))
+	placeHuts(field, map, origin, 7, shade(marble, -0.25))
 end
 
 -- ---------------------------------------------------------------------------

@@ -593,4 +593,5 @@ def render_previews(directory, objects):
         print("rendered: %s" % scene.render.filepath)
 
 
-main()
+if __name__ == "__main__":
+    main()

@@ -61,6 +61,9 @@ local function makeSpawn(index: number): SpawnLocation
 	spawn.Duration = 0
 	spawn.TopSurface = Enum.SurfaceType.Smooth
 	spawn.BottomSurface = Enum.SurfaceType.Smooth
+	-- Invisible: SetPieces puts a modelled dais in the same spot, and this only
+	-- has to be the collision surface and the respawn anchor.
+	spawn.Transparency = 1
 	spawn.Material = Enum.Material.Slate
 	spawn.Color = Feel.ROCK_DARK
 	spawn.Parent = Workspace
@@ -80,37 +83,47 @@ local function makeSpawn(index: number): SpawnLocation
 end
 
 -- Cold fill light for the chamber, so the ice reads as a luminous mass rather
--- than a black silhouette on its unlit faces. Placed in the air around the
--- block, never inside it: lights buried in the ice lit every face by the same
--- amount and flattened the whole thing into one slab, and form comes from faces
--- catching different amounts.
+-- than a black silhouette on its unlit faces.
+--
+-- Placed in the air around the block, never inside it: lights buried in the ice
+-- lit every face by the same amount and flattened the whole thing into one slab,
+-- and form comes from faces catching different amounts.
+--
+-- The count scales with the map. Three lights sized for a 72-stud cave left the
+-- 240-stud pyramid chamber almost black - the pyramid was a silhouette against
+-- nothing - so bigger maps get a grid instead of a fixed trio.
 local function makeGlow(index: number): Folder
 	local folder = Instance.new("Folder")
 	folder.Name = string.format("Plot%d_Glow", index)
 	folder.Parent = Workspace
-	for spot = 1, 3 do
-		local anchor = Instance.new("Part")
-		anchor.Name = string.format("Glow%d", spot)
-		anchor.Size = Vector3.new(1, 1, 1)
-		anchor.Anchored = true
-		anchor.CanCollide = false
-		anchor.CanQuery = false -- must never eat a melt raycast
-		anchor.CanTouch = false
-		anchor.CastShadow = false
-		anchor.Transparency = 1
-		anchor.Parent = folder
-
-		local light = Instance.new("PointLight")
-		light.Brightness = 0.55
-		light.Range = 44
-		light.Color = Color3.fromRGB(150, 205, 255)
-		light.Shadows = false
-		light.Parent = anchor
-	end
 	return folder
 end
 
--- Move the spawn pad and fill lights to suit the map now on this plot.
+local function fillPositions(def: MapDefs.MapDef, origin: Vector3): { Vector3 }
+	local ice = GridMath.iceSize(def)
+	local spots = {}
+
+	-- A grid above the ice, high enough to clear whatever landmark stands on it.
+	local across = math.clamp(math.ceil(ice.X / 80), 1, 3)
+	local height = ice.Y + def.ceilingGap * 0.75
+	for ax = 1, across do
+		for az = 1, across do
+			table.insert(spots, origin + Vector3.new(
+				ice.X * (ax - 0.5) / across,
+				height,
+				ice.Z * (az - 0.5) / across
+			))
+		end
+	end
+
+	-- Two low lights on the walkway, throwing light up the working face.
+	table.insert(spots, origin + Vector3.new(-def.walkway * 0.5, ice.Y * 0.25, ice.Z * 0.3))
+	table.insert(spots, origin + Vector3.new(-def.walkway * 0.5, ice.Y * 0.25, ice.Z * 0.7))
+	return spots
+end
+
+-- Move the spawn pad and rebuild the fill lights to suit the map now on this
+-- plot. The light count is map-dependent, so they are remade rather than moved.
 local function placeFurniture(plot: Plot)
 	local def = plot.def
 	local origin = plot.field.origin
@@ -118,22 +131,31 @@ local function placeFurniture(plot: Plot)
 
 	plot.spawn.CFrame = CFrame.new(GridMath.spawnPosition(def, origin) + Vector3.new(0, 0.5, 0))
 
-	local spots = {
-		origin + Vector3.new(ice.X * 0.25, ice.Y + def.ceilingGap * 0.6, ice.Z * 0.3),
-		origin + Vector3.new(ice.X * 0.75, ice.Y + def.ceilingGap * 0.6, ice.Z * 0.75),
-		origin + Vector3.new(-def.walkway * 0.5, ice.Y * 0.25, ice.Z * 0.5),
-	}
-	local spot = 1
-	for _, anchor in plot.glow:GetChildren() do
-		if anchor:IsA("BasePart") and spots[spot] then
-			anchor.CFrame = CFrame.new(spots[spot])
-			-- Larger maps need the fill to carry further.
-			local light = anchor:FindFirstChildOfClass("PointLight")
-			if light then
-				light.Range = math.max(44, ice.X * 0.55)
-			end
-			spot += 1
-		end
+	plot.glow:ClearAllChildren()
+	local spots = fillPositions(def, origin)
+	local across = math.clamp(math.ceil(ice.X / 80), 1, 3)
+	-- Each light only has to cover its own cell of the grid, plus overlap.
+	local range = math.max(52, (ice.X / across) * 1.15)
+
+	for index, position in spots do
+		local anchor = Instance.new("Part")
+		anchor.Name = string.format("Glow%d", index)
+		anchor.Size = Vector3.new(1, 1, 1)
+		anchor.CFrame = CFrame.new(position)
+		anchor.Anchored = true
+		anchor.CanCollide = false
+		anchor.CanQuery = false -- must never eat a melt raycast
+		anchor.CanTouch = false
+		anchor.CastShadow = false
+		anchor.Transparency = 1
+		anchor.Parent = plot.glow
+
+		local light = Instance.new("PointLight")
+		light.Brightness = 0.75
+		light.Range = range
+		light.Color = Color3.fromRGB(150, 205, 255)
+		light.Shadows = false
+		light.Parent = anchor
 	end
 end
 

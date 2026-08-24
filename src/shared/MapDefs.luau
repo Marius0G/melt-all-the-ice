@@ -105,12 +105,17 @@ local DEFS: { MapDef } = {
 		order = 2,
 
 		-- Four times the footprint of the cave, but on an 8-stud grid, so about
-		-- the same number of Parts. 24 x 5 x 24 chunks = 192 x 40 x 192 studs.
+		-- the same number of Parts. 24 x 4 x 24 chunks = 192 x 32 x 192 studs.
+		--
+		-- Four layers deep, not five. The landmark has to read as a landmark
+		-- from the spawn, and at 40 studs of ice only the pyramid's very top
+		-- cleared it. At 32 nearly half of it stands out. The ceiling gap grows
+		-- to match so the capstone still has air above it.
 		chunkSize = 8,
-		grid = Vector3.new(24, 5, 24),
+		grid = Vector3.new(24, 4, 24),
 		relief = 2,
 		walkway = 24,
-		ceilingGap = 24,
+		ceilingGap = 32,
 		shell = 16,
 		shellMaterial = Enum.Material.Sandstone,
 
@@ -137,11 +142,15 @@ local DEFS: { MapDef } = {
 		label = "Troy",
 		order = 3,
 
+		-- Shallower than it was, for the same reason as the pyramid: at 40 studs
+		-- of ice only the Parthenon's roof showed and it read as a grey lump.
+		-- At 32 the top of the colonnade clears the surface, so it is legibly a
+		-- temple from the moment you arrive.
 		chunkSize = 8,
-		grid = Vector3.new(28, 5, 28),
+		grid = Vector3.new(28, 4, 28),
 		relief = 2,
 		walkway = 24,
-		ceilingGap = 28,
+		ceilingGap = 36,
 		shell = 16,
 		shellMaterial = Enum.Material.Limestone,
 
