@@ -64,8 +64,14 @@ local DEFS: { MapDef } = {
 		label = "The Cave",
 		order = 1,
 
+		-- 12x5x12, not 16x6x16.
+		--
+		-- The doc calls the cave "cea mai usoara, introductiva si mai mica", and
+		-- at the larger size it was not: ~1150 chunks at three stone hits each,
+		-- gated by stamina to roughly half a chunk a second, is over half an hour
+		-- to clear. This lands nearer fifteen minutes and still reads as a room.
 		chunkSize = 4,
-		grid = Vector3.new(16, 6, 16),
+		grid = Vector3.new(12, 5, 12),
 		relief = 3,
 		walkway = 12,
 		ceilingGap = 8,
@@ -79,11 +85,13 @@ local DEFS: { MapDef } = {
 		props = {
 			{ key = "Mammoth", count = 1 },
 			{ key = "FrozenPerson", count = 1 },
+			{ key = "FrozenWolf", count = 1 },
+			{ key = "SpearCache", count = 2 },
 			{ key = "BonePile", count = 2 },
 			{ key = "Chest", count = 2 },
-			{ key = "CrystalCluster", count = 3 },
+			{ key = "CrystalCluster", count = 2 },
 			{ key = "Pot", count = 2 },
-			{ key = "Stalagmite", count = 3 },
+			{ key = "Stalagmite", count = 2 },
 		},
 		tools = { "stone", "axe", "torch" },
 		upgrades = { "break1", "income1", "stamina1", "fuel1", "axe", "torch" },

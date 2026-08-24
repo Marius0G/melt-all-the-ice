@@ -45,14 +45,14 @@ local PropAssets = {}
 
 -- The Model asset the meshes came from. Kept for provenance and for re-reading
 -- the ids if the props are ever re-exported.
-PropAssets.MODEL_ASSET_ID = 71081319796026
+PropAssets.MODEL_ASSET_ID = 108643143098587
 
 local DEFS: { PropDef } = {
 	-- Cave.
 	{
 		key = "Mammoth",
 		label = "Frozen Mammoth",
-		meshId = "rbxassetid://139405436050802",
+		meshId = "rbxassetid://112156951831271",
 		size = Vector3.new(9.34, 5.73, 4.40),
 		color = Color3.fromRGB(124, 82, 54),
 		material = Enum.Material.Sand,
@@ -80,9 +80,29 @@ local DEFS: { PropDef } = {
 		hero = false,
 	},
 	{
+		key = "FrozenWolf",
+		label = "Frozen Wolf",
+		meshId = "rbxassetid://128062392776150",
+		size = Vector3.new(7.32, 3.50, 1.78),
+		color = Color3.fromRGB(128, 122, 116),
+		material = Enum.Material.Sand,
+		reward = 70,
+		hero = false,
+	},
+	{
+		key = "SpearCache",
+		label = "Spear Cache",
+		meshId = "rbxassetid://140252457980207",
+		size = Vector3.new(3.15, 5.11, 3.15),
+		color = Color3.fromRGB(132, 94, 58),
+		material = Enum.Material.Wood,
+		reward = 55,
+		hero = false,
+	},
+	{
 		key = "Stalagmite",
 		label = "Stalagmites",
-		meshId = "rbxassetid://73429654182459",
+		meshId = "rbxassetid://132779876266850",
 		size = Vector3.new(2.80, 5.00, 2.67),
 		color = Color3.fromRGB(118, 122, 132),
 		material = Enum.Material.Slate,

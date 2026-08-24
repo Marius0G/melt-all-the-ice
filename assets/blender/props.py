@@ -399,6 +399,85 @@ def build_shield():
     return shield
 
 
+
+def build_frozen_wolf():
+    """Lean quadruped, about 6 studs long.
+
+    Deliberately smaller and thinner than the mammoth so the two read as
+    different animals in silhouette rather than as one model at two scales -
+    which is all the player ever sees of them through the ice.
+    """
+    parts = []
+    parts.append(sphere("body", radius=1.05, location=(0, 0, 2.5),
+                        scale=(1.7, 0.85, 0.85), subdiv=2))
+    parts.append(sphere("chest", radius=0.85, location=(1.3, 0, 2.6),
+                        scale=(1.0, 0.9, 1.0), subdiv=2))
+    parts.append(sphere("haunch", radius=0.9, location=(-1.4, 0, 2.6),
+                        scale=(0.9, 0.95, 1.0), subdiv=2))
+
+    # Head low and forward, which is what makes it read as a wolf and not a dog.
+    parts.append(box("neck", scale=(0.42, 0.36, 0.42), location=(2.1, 0, 2.5)))
+    parts.append(sphere("skull", radius=0.55, location=(2.8, 0, 2.45),
+                        scale=(1.0, 0.85, 0.9), subdiv=2))
+    parts.append(box("muzzle", scale=(0.5, 0.24, 0.2), location=(3.6, 0, 2.3)))
+    for side in (-1, 1):
+        parts.append(cone("ear", radius=0.17, depth=0.55,
+                          location=(2.6, side * 0.3, 3.05), verts=4))
+
+    for sx in (-1.3, 1.2):
+        for sy in (-0.6, 0.6):
+            parts.append(cylinder("leg", radius=0.24, depth=2.2,
+                                  location=(sx, sy, 1.1), verts=6))
+            parts.append(box("paw", scale=(0.3, 0.26, 0.14), location=(sx + 0.1, sy, 0.14)))
+
+    parts.append(box("tail", scale=(0.7, 0.18, 0.18), location=(-2.5, 0, 2.9),
+                     rotation=(0, -22, 0)))
+    return join("FrozenWolf", parts)
+
+
+def build_spear_cache():
+    """A bundle of spears stood together, about 5 studs tall.
+
+    The cave's tool progression starts at a bare stone, so a cache of finished
+    weapons frozen in the ice is somebody else's version of the same story.
+    """
+    parts = []
+    # A leaning shaft does not end above where it started, so the tip and the
+    # lashing are placed by following the shaft's own axis out from its centre
+    # rather than by guessing an offset. Eyeballing it left the heads floating
+    # clear of the shafts.
+    lean = math.radians(14)
+    radius, half = 0.75, 2.2
+    axial = (math.sin(lean), math.cos(lean))  # (outward, up) per unit along the shaft
+
+    for i in range(4):
+        angle = i * (math.pi * 2 / 4) + 0.4
+        ca, sa = math.cos(angle), math.sin(angle)
+        tilt = (math.degrees(lean) * sa, -math.degrees(lean) * ca, 0)
+        x, y = ca * radius, sa * radius
+        parts.append(cylinder("shaft%d" % i, radius=0.11, depth=half * 2,
+                              location=(x, y, half), rotation=tilt, verts=6))
+
+        def along(distance):
+            out = radius + axial[0] * distance
+            return (ca * out, sa * out, half + axial[1] * distance)
+
+        # Cone centre sits half its own depth past the end of the shaft.
+        parts.append(cone("tip%d" % i, radius=0.22, depth=0.8,
+                          location=along(half + 0.4), rotation=tilt, verts=4))
+        parts.append(box("bind%d" % i, scale=(0.16, 0.16, 0.14),
+                         location=along(half - 0.3), rotation=tilt))
+
+    # A hide bundled at the base, and a couple of stones holding it down.
+    parts.append(box("hide", scale=(1.05, 0.9, 0.22), location=(0, 0, 0.22)))
+    for i in range(3):
+        angle = i * (math.pi * 2 / 3)
+        parts.append(sphere("stone%d" % i, radius=0.42,
+                            location=(math.cos(angle) * 1.15, math.sin(angle) * 1.15, 0.3),
+                            scale=(1.0, 1.0, 0.65), subdiv=1))
+    return join("SpearCache", parts)
+
+
 PROPS = {
     "Mammoth": build_mammoth,
     "BonePile": build_bonepile,
@@ -407,6 +486,8 @@ PROPS = {
     "Chest": build_chest,
     "Stalagmite": build_stalagmite,
     "Pot": build_pot,
+    "FrozenWolf": build_frozen_wolf,
+    "SpearCache": build_spear_cache,
     "Sarcophagus": build_sarcophagus,
     "Obelisk": build_obelisk,
     "CanopicJar": build_canopic_jar,
