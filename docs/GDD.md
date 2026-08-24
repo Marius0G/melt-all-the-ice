@@ -89,17 +89,62 @@ the player, in the style of the genre (skins + modifiers on the same base tool).
 
 ---
 
-## Open design questions
+## Architecture decisions
 
-These need a decision before the relevant system is built:
+Decided 2026-08-24. These are settled — build against them.
 
-1. **Ice representation** — voxel `Terrain` (Ice material, melt = write Air) vs. a grid of
-   `Part` blocks. Terrain looks far better and melts organically; Parts are easier to score,
-   replicate cheaply, and drive "X% melted" progress from. A hybrid (Parts for scoring
-   chunks, Terrain for visual dressing) is likely the answer.
-2. **Per-player vs. shared world** — does each player melt their own instance of the map,
-   or do all players in a server melt one shared map? Shared is more social; per-player is
-   the simulator norm and avoids "someone already cleared it".
-3. **Map reset** — once a map is fully thawed, does it re-freeze for the next run?
-4. **Monetization** — gamepasses / dev products are not in the source doc but are the norm
-   for this genre. Out of scope until asked.
+### AD-1: Ice is hybrid — Parts for scoring, Terrain for looks
+
+The authoritative gameplay unit is an **ice chunk**: a `Part` on a 3D grid, each with its
+own HP. Roblox `Terrain` (Ice material) fills the same volume purely as the visual layer.
+
+Melting one chunk:
+
+1. Tool swing → server raycast → resolve which chunk was hit
+2. Subtract HP (scaled by tool break-power / fire-power)
+3. On HP ≤ 0: `Terrain:FillBlock` that chunk's volume with `Enum.Material.Air`,
+   destroy the chunk Part, award money, increment the melted counter
+
+Map progress is `destroyedChunks / totalChunks` — cheap, exact, and drives the "% thawed"
+UI and the map finale (pyramid tip lighting up, etc.) without inspecting voxels.
+
+Chunk Parts should be non-collidable and either invisible or near-invisible; the Terrain is
+what the player actually sees. Grid resolution is a tuning knob — start coarse (4-8 studs)
+and only go finer if melting feels chunky.
+
+### AD-2: Per-player worlds, via spatially separated plots
+
+Each player melts their own copy of the map. No shared progress.
+
+⚠️ **Constraint worth knowing up front:** Roblox `Terrain` is a *single global singleton* —
+there is exactly one Terrain object per place and it replicates to everyone. Per-player
+terrain does not exist natively.
+
+The workable pattern is **plots**: allocate N plot regions spaced far apart in world space,
+and give each joining player one. Terrain is still one object, but each player's carved
+region is physically separate, so writes never collide and nobody sees anyone else's map.
+Combined with `StreamingEnabled` (already on in `default.project.json`), distant plots
+aren't streamed to the client at all.
+
+Trade-offs to respect:
+
+- Terrain memory scales with `plots × map volume` — this caps max players per server.
+  Size the cave accordingly and pick the plot count deliberately.
+- Plots must be released and re-frozen on player leave (see AD-3).
+
+### AD-3: Cleared maps re-freeze
+
+Once a map is fully thawed, it resets to frozen for the next run. So map generation must be
+**idempotent and re-runnable on a live plot** — the same generator that builds a fresh plot
+also restores a cleared one. Build it as `generate(plotOrigin)` from the start rather than
+retrofitting a reset path later.
+
+Plot release on player leave should re-freeze too, so a recycled plot never hands the next
+player a half-melted map.
+
+## Still open
+
+- **Monetization** — gamepasses / dev products aren't in the source doc but are the norm for
+  this genre. Out of scope until asked.
+- **Chunk grid resolution** and **plot count** — tuning values, settle them by feel once the
+  cave is playable.
