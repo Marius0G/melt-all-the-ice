@@ -61,4 +61,15 @@ function Remotes.swingResult(): RemoteEvent
 	return event("SwingResult")
 end
 
+-- Create every remote up front, before any client can ask for one.
+--
+-- The lazy path above is fine on the server, which creates on demand, but the
+-- client blocks on WaitForChild. A remote the server only builds the first time
+-- it fires deadlocks any client that listens for it at startup - and a listener
+-- is exactly what a server -> client event is for. Add new remotes here too.
+function Remotes.initServer()
+	Remotes.swing()
+	Remotes.swingResult()
+end
+
 return Remotes

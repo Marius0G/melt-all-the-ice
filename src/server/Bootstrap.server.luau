@@ -4,10 +4,13 @@
 ]]
 
 local Players = game:GetService("Players")
+local PhysicsService = game:GetService("PhysicsService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GridMath = require(Shared:WaitForChild("GridMath"))
+local Remotes = require(Shared:WaitForChild("Remotes"))
 
 local modules = script.Parent
 local Ambience = require(modules:WaitForChild("Ambience"))
@@ -21,7 +24,24 @@ local StoneTool = require(modules:WaitForChild("StoneTool"))
 -- world origin while allocation is still in flight.
 Players.CharacterAutoLoads = false
 
+-- Before anything else: clients block on WaitForChild for these.
+Remotes.initServer()
+
 Ambience.apply()
+
+-- Cave acoustics, one line. Applies to every 3D sound in the place.
+SoundService.AmbientReverb = Enum.ReverbType.Cave
+
+-- Ice fragments are spawned client-side for feedback, but collision groups can
+-- only be registered on the server. Shards bounce off the world and ignore each
+-- other and the player: fragment-vs-fragment is the expensive half of the
+-- physics, and shards shoving the player around would be a bug, not a feature.
+local SHARD_GROUP = "Shards"
+if not PhysicsService:IsCollisionGroupRegistered(SHARD_GROUP) then
+	PhysicsService:RegisterCollisionGroup(SHARD_GROUP)
+end
+PhysicsService:CollisionGroupSetCollidable(SHARD_GROUP, SHARD_GROUP, false)
+PhysicsService:CollisionGroupSetCollidable(SHARD_GROUP, "Default", true)
 
 local buildStart = os.clock()
 PlotManager.init()
