@@ -17,10 +17,12 @@ local modules = script.Parent
 local Ambience = require(modules:WaitForChild("Ambience"))
 local Discoveries = require(modules:WaitForChild("Discoveries"))
 local Finale = require(modules:WaitForChild("Finale"))
+local Combo = require(modules:WaitForChild("Combo"))
 local IceField = require(modules:WaitForChild("IceField"))
 local MeltService = require(modules:WaitForChild("MeltService"))
 local PlayerStats = require(modules:WaitForChild("PlayerStats"))
 local PlotManager = require(modules:WaitForChild("PlotManager"))
+local Quests = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Quests"))
 local Progression = require(modules:WaitForChild("Progression"))
 local SaveService = require(modules:WaitForChild("SaveService"))
 local SetPieces = require(modules:WaitForChild("SetPieces"))
@@ -78,6 +80,7 @@ ready:Destroy()
 print(string.format("[MeltAllTheIce] loaded meshes in %.2fs", os.clock() - meshStart))
 
 local buildStart = os.clock()
+Combo.start()
 PlotManager.init()
 print(string.format("[MeltAllTheIce] built plots in %.2fs", os.clock() - buildStart))
 
@@ -128,7 +131,18 @@ local function onPlayerAdded(player: Player)
 	-- Load before allocating: which map the plot should be built as depends on
 	-- what this player has unlocked, so the save has to be read first.
 	local save = SaveService.load(player)
-	Progression.add(player, save.upgrades, save.unlockedMaps, save.skins, save.equippedSkins)
+	Combo.add(player)
+	Progression.add(player, {
+		upgrades = save.upgrades,
+		maps = save.unlockedMaps,
+		skins = save.skins,
+		equipped = save.equippedSkins,
+		rebirths = save.rebirths,
+		collection = save.collection,
+		questDay = save.questDay,
+		questProgress = save.questProgress,
+		questClaimed = save.questClaimed,
+	})
 	PlayerStats.add(player, save.money)
 
 	local plot = PlotManager.allocate(player, Progression.currentMap(player))
@@ -153,8 +167,9 @@ end
 -- What a save is made of, gathered from whoever owns each piece.
 local function collect(player: Player): SaveService.Save
 	local stats = PlayerStats.get(player)
+	local questProgress, questClaimed = Progression.questState(player)
 	return {
-		version = 1,
+		version = 2,
 		money = if stats then stats.money else 0,
 		upgrades = Progression.levels(player),
 		-- Which maps are unlocked persists; how far through one you were does
@@ -162,6 +177,13 @@ local function collect(player: Player): SaveService.Save
 		unlockedMaps = Progression.unlockedMaps(player),
 		skins = Progression.ownedSkins(player),
 		equippedSkins = Progression.equippedSkins(player),
+		rebirths = Progression.rebirths(player),
+		collection = Progression.collection(player),
+		-- The day travels with the progress. Without it a save made yesterday
+		-- would restore yesterday's counters against today's three quests.
+		questDay = Quests.today(),
+		questProgress = questProgress,
+		questClaimed = questClaimed,
 	}
 end
 

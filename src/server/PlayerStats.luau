@@ -77,6 +77,17 @@ function PlayerStats.addMoney(player: Player, amount: number)
 end
 
 -- Spend if affordable. The single place money leaves a player.
+-- Set outright rather than adjusted. Rebirth zeroes the balance, and doing that
+-- as addMoney(-money) would race any payout landing in the same frame.
+function PlayerStats.setMoney(player: Player, amount: number)
+	local entry = stats[player]
+	if not entry then
+		return
+	end
+	entry.money = math.max(0, math.floor(amount))
+	player:SetAttribute("Money", entry.money)
+end
+
 function PlayerStats.spendMoney(player: Player, amount: number): boolean
 	local entry = stats[player]
 	if not entry or entry.money < amount then

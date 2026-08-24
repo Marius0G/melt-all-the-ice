@@ -9,8 +9,9 @@
 	runs exactly as before with saving quietly off. Nothing here is allowed to
 	stop a player joining or playing.
 
-	What persists: money and upgrade levels, which is to say everything the
-	player worked for. What does not: how far through a map they were. That is
+	What persists: money, upgrade levels, skins, rebirths, the collection log
+	and today's quest progress - which is to say everything the player worked
+	for. What does not: how far through a map they were. That is
 	deliberate and follows AD-3 - plots re-freeze when released, so a map is
 	always started from frozen. Carrying half a melted cave across sessions would
 	need the whole grid state saved and would contradict the reset the design
@@ -28,7 +29,7 @@ local RunService = game:GetService("RunService")
 local SaveService = {}
 
 local STORE_NAME = "MeltAllTheIce"
-local SCHEMA_VERSION = 1
+local SCHEMA_VERSION = 2
 local AUTOSAVE_SECONDS = 120
 local RETRIES = 3
 
@@ -39,6 +40,11 @@ export type Save = {
 	unlockedMaps: { [string]: boolean },
 	skins: { [string]: boolean },
 	equippedSkins: { [string]: string },
+	rebirths: number,
+	collection: { [string]: number },
+	questDay: number,
+	questProgress: { [string]: number },
+	questClaimed: { [string]: boolean },
 }
 
 local store: DataStore? = nil
@@ -58,6 +64,11 @@ local function emptySave(): Save
 		unlockedMaps = { cave = true },
 		skins = {},
 		equippedSkins = {},
+		rebirths = 0,
+		collection = {},
+		questDay = 0,
+		questProgress = {},
+		questClaimed = {},
 	}
 end
 
@@ -151,6 +162,37 @@ function SaveService.load(player: Player): Save
 			end
 		end
 	end
+
+	-- Everything below arrived after schema 1, so a version 1 save simply has
+	-- none of it and falls through to the empty defaults. That is the whole
+	-- migration: nothing was renamed or reinterpreted, only added.
+	if typeof(data.rebirths) == "number" then
+		save.rebirths = math.max(0, math.floor(data.rebirths))
+	end
+	if typeof(data.collection) == "table" then
+		for key, count in data.collection do
+			if typeof(key) == "string" and typeof(count) == "number" then
+				save.collection[key] = math.max(0, math.floor(count))
+			end
+		end
+	end
+	if typeof(data.questDay) == "number" then
+		save.questDay = math.max(0, math.floor(data.questDay))
+	end
+	if typeof(data.questProgress) == "table" then
+		for key, value in data.questProgress do
+			if typeof(key) == "string" and typeof(value) == "number" then
+				save.questProgress[key] = math.max(0, math.floor(value))
+			end
+		end
+	end
+	if typeof(data.questClaimed) == "table" then
+		for key, claimed in data.questClaimed do
+			if typeof(key) == "string" then
+				save.questClaimed[key] = claimed == true
+			end
+		end
+	end
 	return save
 end
 
@@ -189,6 +231,25 @@ local function fingerprint(save: Save): string
 	end
 	table.sort(worn)
 	table.insert(parts, "worn:" .. table.concat(worn, ","))
+
+	-- These have to be in the fingerprint or the de-duplication would decide
+	-- nothing had changed and quietly skip the write.
+	table.insert(parts, "rb:" .. tostring(save.rebirths))
+
+	local found = {}
+	for key, count in save.collection do
+		table.insert(found, key .. "=" .. tostring(count))
+	end
+	table.sort(found)
+	table.insert(parts, "log:" .. table.concat(found, ","))
+
+	local quests = {}
+	for key, value in save.questProgress do
+		table.insert(quests, key .. "=" .. tostring(value) .. (if save.questClaimed[key] then "!" else ""))
+	end
+	table.sort(quests)
+	table.insert(parts, string.format("q%d:%s", save.questDay, table.concat(quests, ",")))
+
 	return table.concat(parts, "|")
 end
 

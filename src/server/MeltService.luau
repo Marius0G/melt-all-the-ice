@@ -32,9 +32,11 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GridMath = require(Shared:WaitForChild("GridMath"))
 local MapDefs = require(Shared:WaitForChild("MapDefs"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
+local Rarity = require(Shared:WaitForChild("Rarity"))
 local Tools = require(Shared:WaitForChild("Tools"))
 
 local modules = script.Parent
+local Combo = require(modules:WaitForChild("Combo"))
 local Discoveries = require(modules:WaitForChild("Discoveries"))
 local Finale = require(modules:WaitForChild("Finale"))
 local IceField = require(modules:WaitForChild("IceField"))
@@ -100,10 +102,25 @@ local function resolveStrike(
 	plot: PlotManager.Plot,
 	tool: Tools.ToolDef,
 	cell: number,
-	damage: number
+	damage: number,
+	swung: boolean -- a real swing, as opposed to a burn tick
 ): (number, number, number)
 	local map = plot.def
 	local destroyed, earned, centreRatio = 0, 0, 0
+
+	-- Taken once, up front, for the whole strike.
+	--
+	-- Extended by any swing that connects with ice, not only one that breaks a
+	-- chunk. Measured: the stone costs 24 stamina against a 100 bar regenerating
+	-- at 12/s, so it swings about every two seconds and breaks a 30 HP chunk
+	-- about every six - well outside any sane window. Keyed to breaks, the
+	-- streak was mathematically unreachable with the starting tool, which is
+	-- exactly when a player most needs the encouragement.
+	--
+	-- Burn ticks do not extend it. They are the tool working on its own after
+	-- the swing, and counting them would let a torch hold a streak indefinitely
+	-- for one click.
+	local streak = if swung then Combo.hit(player) else Combo.multiplierFor(Combo.get(player))
 
 	for _, target in cellsInRange(map, cell, tool.aoe) do
 		local outcome = IceField.damageCell(plot.field, target, damage)
@@ -115,7 +132,7 @@ local function resolveStrike(
 
 			local payout = math.max(
 				1,
-				math.floor(map.moneyPerChunk * Progression.incomeMultiplier(player) + 0.5)
+				math.floor(map.moneyPerChunk * Progression.incomeMultiplier(player) * streak + 0.5)
 			)
 			earned += payout
 			PlayerStats.addMoney(player, payout)
@@ -125,16 +142,22 @@ local function resolveStrike(
 				-- Prop rewards are stored cave-equivalent and scaled by the map,
 				-- so a chest that is a real find in the cave is not loose change
 				-- in Troy where a single chunk pays twenty.
-				local bounty = math.max(1, math.floor(found.def.reward * map.moneyPerChunk + 0.5))
+				local tier = Rarity.forReward(found.def.reward, found.def.hero)
+				local bounty = Rarity.payout(
+					math.max(1, math.floor(found.def.reward * map.moneyPerChunk + 0.5)),
+					tier
+				)
 				earned += bounty
 				PlayerStats.addMoney(player, bounty)
 				PlayerStats.setFinds(player, plot.finds.found, Discoveries.total(plot.finds))
+				Progression.recordFind(player, found.def.key, tier)
 				Remotes.discovery():FireClient(
 					player,
 					found.part.Position,
 					found.def.label,
 					bounty,
-					found.def.hero
+					found.def.hero,
+					tier.key
 				)
 			end
 		end
@@ -143,6 +166,8 @@ local function resolveStrike(
 	if destroyed == 0 then
 		return 0, 0, centreRatio
 	end
+
+	Progression.recordChunks(player, destroyed)
 
 	local progress = IceField.progress(plot.field)
 	PlayerStats.setThawed(player, progress)
@@ -164,6 +189,7 @@ local function resolveStrike(
 			Discoveries.total(plot.finds)
 		)
 		if fired then
+			Progression.recordMapCleared(player)
 			-- Clearing a map is what unlocks the next one.
 			if following then
 				Progression.unlock(player, following.id)
@@ -256,7 +282,7 @@ local function onSwing(player: Player, direction: unknown)
 	end
 
 	local damage = tool.damage * Progression.breakMultiplier(player)
-	local destroyed, earned, centreRatio = resolveStrike(player, plot, tool, cell, damage)
+	local destroyed, earned, centreRatio = resolveStrike(player, plot, tool, cell, damage, true)
 
 	Remotes.swingResult():FireClient(
 		player,
@@ -275,7 +301,7 @@ local function onSwing(player: Player, direction: unknown)
 				if not player.Parent or PlotManager.get(player) ~= plot then
 					return
 				end
-				local burned, paid = resolveStrike(player, plot, tool, cell, damage)
+				local burned, paid = resolveStrike(player, plot, tool, cell, damage, false)
 				if burned > 0 then
 					Remotes.swingResult():FireClient(
 						player,

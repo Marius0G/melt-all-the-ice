@@ -62,7 +62,7 @@ function Remotes.swingResult(): RemoteEvent
 end
 
 -- Server -> client, owner only. Fired when the last of the ice over a buried
--- find comes away: (position, label, reward, hero).
+-- find comes away: (position, label, reward, hero, rarityKey).
 function Remotes.discovery(): RemoteEvent
 	return event("Discovery")
 end
@@ -95,6 +95,28 @@ function Remotes.skinResult(): RemoteEvent
 	return event("SkinResult")
 end
 
+-- Client -> server: a quest key to claim. Completion and the reward are both
+-- decided server-side; the key carries no authority.
+function Remotes.claimQuest(): RemoteEvent
+	return event("ClaimQuest")
+end
+
+-- Server -> client: (key, ok, reward, message).
+function Remotes.claimResult(): RemoteEvent
+	return event("ClaimResult")
+end
+
+-- Client -> server. No payload at all: there is only one thing to rebirth into
+-- and eligibility is the server's to decide.
+function Remotes.rebirth(): RemoteEvent
+	return event("Rebirth")
+end
+
+-- Server -> client: (ok, message).
+function Remotes.rebirthResult(): RemoteEvent
+	return event("RebirthResult")
+end
+
 -- Create every remote up front, before any client can ask for one.
 --
 -- The lazy path above is fine on the server, which creates on demand, but the
@@ -110,6 +132,10 @@ function Remotes.initServer()
 	Remotes.finale()
 	Remotes.skin()
 	Remotes.skinResult()
+	Remotes.claimQuest()
+	Remotes.claimResult()
+	Remotes.rebirth()
+	Remotes.rebirthResult()
 end
 
 return Remotes
