@@ -36,10 +36,15 @@ Feel.MELTWATER = Color3.fromRGB(56, 132, 176)
 	thing that fights the cartoony target hardest.
 
 	The three stages are read from remaining HP, so a chunk visibly frosts over
-	and shrinks as it fractures. Shrinking is the honest cue: unlike a stage
-	swap it is continuous, so it still reads when a stronger tool skips a stage.
-	Kept mild - the parts are also the raycast targets, and shrinking them far
-	would open gaps a ray could slip between.
+	as it fractures.
+
+	Damaged chunks used to shrink slightly as well, and that had to come out. The
+	chunk Parts are also the raycast targets, so shrinking one opens a gap
+	between it and its neighbours - and a player aiming anywhere near a chunk
+	boundary would have their ray slip through that gap into the chunk behind.
+	The symptom was a whole row chipped once each and nothing ever breaking,
+	because every swing landed one chunk deeper than the last. Frosting is
+	colour and transparency only now, and geometry never moves.
 ]]
 --
 -- Transparency is deliberately low. It started at 0.28, which looks reasonable
@@ -65,9 +70,9 @@ Feel.ICE_FACET_JITTER = 0.07
 -- than a literal colour: each map has its own ice (MapDefs) but damage has to
 -- read identically everywhere, so the progression is stored as a blend amount.
 Feel.ICE_STAGES = {
-	{ above = 0.80, frost = 0.00, transparency = 0.12, scale = 1.00 },
-	{ above = 0.45, frost = 0.35, transparency = 0.08, scale = 0.96 },
-	{ above = -1, frost = 0.72, transparency = 0.04, scale = 0.90 },
+	{ above = 0.80, frost = 0.00, transparency = 0.12 },
+	{ above = 0.45, frost = 0.42, transparency = 0.07 },
+	{ above = -1, frost = 0.80, transparency = 0.03 },
 }
 
 -- Swing arc. The Trail default lifetime is 2.0, which smears into a ribbon that

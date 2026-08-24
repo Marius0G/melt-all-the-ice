@@ -131,8 +131,9 @@ local function paint(field: IceField, chunk: Chunk)
 		math.clamp(base.G * tint, 0, 1),
 		math.clamp(base.B * tint, 0, 1)
 	)
-	local size = field.def.chunkSize * stage.scale
-	chunk.part.Size = Vector3.new(size, size, size)
+	-- Size is deliberately never touched here. These Parts are the raycast
+	-- targets, so resizing a damaged one opens a gap against its neighbours and
+	-- a ray aimed near the boundary slips through into the chunk behind.
 	chunk.part.Transparency = if chunk.visible then stage.transparency else 1
 end
 
