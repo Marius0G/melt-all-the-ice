@@ -53,6 +53,7 @@ export type DamageResult = {
 	destroyed: boolean,
 	center: Vector3,
 	hpRatio: number, -- fraction of HP left after the hit; 0 once destroyed
+	cell: number, -- grid cell, so the caller can ask what was buried there
 }
 
 export type IceField = {
@@ -82,10 +83,6 @@ local function fill(center: Vector3, size: Vector3, material: Enum.Material)
 	Workspace.Terrain:FillBlock(CFrame.new(center), size, material)
 end
 
-local function cellIndex(gx: number, gy: number, gz: number): number
-	return (gx * Config.GRID_Y + gy) * Config.GRID_Z + gz
-end
-
 local function inBounds(gx: number, gy: number, gz: number): boolean
 	return gx >= 0
 		and gx < Config.GRID_X
@@ -103,7 +100,7 @@ local function isExposed(field: IceField, gx: number, gy: number, gz: number): b
 		if not inBounds(nx, ny, nz) then
 			return true
 		end
-		if field.grid[cellIndex(nx, ny, nz)] == nil then
+		if field.grid[GridMath.cellIndex(nx, ny, nz)] == nil then
 			return true
 		end
 	end
@@ -196,7 +193,7 @@ function IceField.build(field: IceField)
 					stage = 1,
 				}
 				field.chunks[part] = chunk
-				field.grid[cellIndex(gx, gy, gz)] = chunk
+				field.grid[GridMath.cellIndex(gx, gy, gz)] = chunk
 				built += 1
 			end
 		end
@@ -249,11 +246,17 @@ function IceField.damage(field: IceField, part: BasePart, amount: number): Damag
 			chunk.stage = stage
 			paint(chunk)
 		end
-		return { destroyed = false, center = chunk.center, hpRatio = ratio }
+		return {
+			destroyed = false,
+			center = chunk.center,
+			hpRatio = ratio,
+			cell = GridMath.cellIndex(chunk.gx, chunk.gy, chunk.gz),
+		}
 	end
 
+	local cell = GridMath.cellIndex(chunk.gx, chunk.gy, chunk.gz)
 	field.chunks[part] = nil
-	field.grid[cellIndex(chunk.gx, chunk.gy, chunk.gz)] = nil
+	field.grid[cell] = nil
 	part:Destroy()
 	field.destroyed += 1
 
@@ -262,14 +265,20 @@ function IceField.damage(field: IceField, part: BasePart, amount: number): Damag
 	for _, face in FACES do
 		local nx, ny, nz = chunk.gx + face.X, chunk.gy + face.Y, chunk.gz + face.Z
 		if inBounds(nx, ny, nz) then
-			local neighbour = field.grid[cellIndex(nx, ny, nz)]
+			local neighbour = field.grid[GridMath.cellIndex(nx, ny, nz)]
 			if neighbour then
 				setVisible(neighbour, true)
 			end
 		end
 	end
 
-	return { destroyed = true, center = chunk.center, hpRatio = 0 }
+	return { destroyed = true, center = chunk.center, hpRatio = 0, cell = cell }
+end
+
+-- Is this cell solid ice right now? Used when scattering finds, which may only
+-- claim cells that actually exist.
+function IceField.occupied(field: IceField, cell: number): boolean
+	return field.grid[cell] ~= nil
 end
 
 -- Fraction thawed, 0..1.

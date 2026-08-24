@@ -23,6 +23,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 
+local Discoveries = require(script.Parent:WaitForChild("Discoveries"))
 local IceField = require(script.Parent:WaitForChild("IceField"))
 local PlotManager = require(script.Parent:WaitForChild("PlotManager"))
 local PlayerStats = require(script.Parent:WaitForChild("PlayerStats"))
@@ -90,6 +91,20 @@ local function onSwing(player: Player, direction: unknown)
 	if outcome.destroyed then
 		PlayerStats.addMoney(player, Config.MONEY_PER_CHUNK)
 		PlayerStats.setThawed(player, IceField.progress(plot.field))
+
+		-- Was that the last of the ice over something?
+		local found = Discoveries.onCellCleared(plot.finds, outcome.cell)
+		if found then
+			PlayerStats.addMoney(player, found.def.reward)
+			PlayerStats.setFinds(player, plot.finds.found, Discoveries.total(plot.finds))
+			Remotes.discovery():FireClient(
+				player,
+				found.part.Position,
+				found.def.label,
+				found.def.reward,
+				found.def.hero
+			)
+		end
 	end
 
 	-- Cosmetics are the client's job, but it is told what happened rather than

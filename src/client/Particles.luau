@@ -141,6 +141,50 @@ local function fire(attachment: Attachment, emitters: { ParticleEmitter }, count
 	end)
 end
 
+-- Warm, upward, and much bigger than a shatter. The contrast in colour matters
+-- as much as the count: everything else in the cave is cold, so gold reads as
+-- reward without needing a label.
+local function sparkEmitter(): ParticleEmitter
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Texture = Feel.TEXTURES.SPARKLE
+	emitter.Enabled = false
+	emitter.Lifetime = NumberRange.new(0.7, 1.4)
+	emitter.Speed = NumberRange.new(9, 22)
+	emitter.SpreadAngle = Vector2.new(180, 180)
+	emitter.Acceleration = Vector3.new(0, -22, 0)
+	emitter.Drag = 2.2
+	emitter.Rotation = NumberRange.new(0, 360)
+	emitter.RotSpeed = NumberRange.new(-160, 160)
+	emitter.LightEmission = 0.9
+	emitter.LightInfluence = 0
+	emitter.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 244, 200)),
+		ColorSequenceKeypoint.new(0.5, Feel.MONEY),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(210, 130, 30)),
+	})
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.7),
+		NumberSequenceKeypoint.new(0.6, 0.45),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	emitter.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.7, 0.15),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	return emitter
+end
+
+function Particles.reveal(position: Vector3)
+	if not withinRange(position) then
+		return
+	end
+	local attachment = Instance.new("Attachment")
+	attachment.WorldPosition = position
+	attachment.Parent = Workspace.Terrain
+	fire(attachment, { sparkEmitter(), puffEmitter() }, { Feel.SPARKS_ON_REVEAL, 10 })
+end
+
 function Particles.shatter(position: Vector3, normal: Vector3)
 	if not withinRange(position) then
 		return

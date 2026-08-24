@@ -76,6 +76,7 @@ Feel.TRAIL_WIDTH = 0.8
 -- they read it from anything else.
 Feel.SHARDS_ON_KILL = 22
 Feel.SHARDS_ON_CHIP = 7
+Feel.SPARKS_ON_REVEAL = 40
 Feel.PUFF_ON_KILL = 5
 
 -- Camera shake: magnitude, roughness (the frequency noise is sampled at), and
@@ -144,6 +145,12 @@ Feel.SOUNDS = {
 		"rbxassetid://9120972323",
 		"rbxassetid://9120972457",
 	},
+	-- Uncovering a find. High, bright and short, so it sits clearly above the
+	-- low crack of the shatter that caused it.
+	REVEAL = {
+		"rbxassetid://9119315072",
+		"rbxassetid://9114427571",
+	},
 	DRIP = {
 		"rbxassetid://9126190182",
 		"rbxassetid://9126190364",
@@ -159,6 +166,11 @@ Feel.SOUND_CLAMP = {
 }
 
 Feel.TAIL_DELAY = 0.08
+
+-- The reveal is staged behind the break that triggers it. Landing both in the
+-- same 200ms makes them compete and reads as one muddled event; a short gap
+-- lets the shatter finish and gives the find its own beat.
+Feel.REVEAL_DELAY = 0.22
 
 --[[
 	Built-in particle textures, verified present in the shipping client.

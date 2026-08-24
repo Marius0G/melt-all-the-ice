@@ -37,7 +37,7 @@ function HUD.start()
 
 	-- Top-left readout: money over progress.
 	local panel = Instance.new("Frame")
-	panel.Size = UDim2.fromOffset(230, 86)
+	panel.Size = UDim2.fromOffset(230, 112)
 	panel.Position = UDim2.fromOffset(16, 16)
 	panel.BackgroundColor3 = BACKGROUND
 	panel.BackgroundTransparency = 0.25
@@ -66,6 +66,17 @@ function HUD.start()
 	thawedLabel.TextXAlignment = Enum.TextXAlignment.Left
 	thawedLabel.Text = "0.0% thawed"
 	thawedLabel.Parent = panel
+
+	local foundLabel = Instance.new("TextLabel")
+	foundLabel.Size = UDim2.new(1, -24, 0, 24)
+	foundLabel.Position = UDim2.fromOffset(12, 76)
+	foundLabel.BackgroundTransparency = 1
+	foundLabel.Font = Enum.Font.GothamBold
+	foundLabel.TextSize = 17
+	foundLabel.TextColor3 = Color3.fromRGB(255, 200, 38)
+	foundLabel.TextXAlignment = Enum.TextXAlignment.Left
+	foundLabel.Text = "0 / 0 found"
+	foundLabel.Parent = panel
 
 	-- Bottom-centre stamina bar.
 	local barBack = Instance.new("Frame")
@@ -106,6 +117,12 @@ function HUD.start()
 		thawedLabel.Text = string.format("%.1f%% thawed", fraction * 100)
 	end
 
+	local function renderFinds()
+		local found = toNumber(player:GetAttribute("Found"), 0)
+		local total = toNumber(player:GetAttribute("FoundTotal"), 0)
+		foundLabel.Text = string.format("%d / %d found", found, total)
+	end
+
 	local function renderStamina()
 		local maximum = toNumber(player:GetAttribute("StaminaMax"), 100)
 		local current = toNumber(player:GetAttribute("Stamina"), maximum)
@@ -118,11 +135,14 @@ function HUD.start()
 
 	player:GetAttributeChangedSignal("Money"):Connect(renderMoney)
 	player:GetAttributeChangedSignal("ThawedPct"):Connect(renderThawed)
+	player:GetAttributeChangedSignal("Found"):Connect(renderFinds)
+	player:GetAttributeChangedSignal("FoundTotal"):Connect(renderFinds)
 	player:GetAttributeChangedSignal("Stamina"):Connect(renderStamina)
 	player:GetAttributeChangedSignal("StaminaMax"):Connect(renderStamina)
 
 	renderMoney()
 	renderThawed()
+	renderFinds()
 	renderStamina()
 end
 

@@ -49,6 +49,13 @@ function GridMath.plotOrigin(index: number): Vector3
 	return Vector3.new(index * Config.PLOT_SPACING, 0, 0)
 end
 
+-- Linear index for grid cell (gx, gy, gz). Lives here rather than in IceField
+-- because Discoveries keys its claims by the same number - two copies of this
+-- formula that drift apart would silently mismatch props to chunks.
+function GridMath.cellIndex(gx: number, gy: number, gz: number): number
+	return (gx * Config.GRID_Y + gy) * Config.GRID_Z + gz
+end
+
 -- World-space centre of chunk (gx, gy, gz), all 0-based.
 function GridMath.chunkCenter(origin: Vector3, gx: number, gy: number, gz: number): Vector3
 	local s = Config.CHUNK_SIZE

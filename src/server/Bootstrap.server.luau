@@ -14,6 +14,7 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 
 local modules = script.Parent
 local Ambience = require(modules:WaitForChild("Ambience"))
+local Discoveries = require(modules:WaitForChild("Discoveries"))
 local IceField = require(modules:WaitForChild("IceField"))
 local MeltService = require(modules:WaitForChild("MeltService"))
 local PlayerStats = require(modules:WaitForChild("PlayerStats"))
@@ -47,6 +48,12 @@ if not PhysicsService:IsCollisionGroupRegistered(SHARD_GROUP) then
 end
 PhysicsService:CollisionGroupSetCollidable(SHARD_GROUP, SHARD_GROUP, false)
 PhysicsService:CollisionGroupSetCollidable(SHARD_GROUP, "Default", true)
+
+-- Prop meshes first, together, so plot building is not serialised behind seven
+-- separate asset fetches.
+local meshStart = os.clock()
+Discoveries.preload()
+print(string.format("[MeltAllTheIce] loaded prop meshes in %.2fs", os.clock() - meshStart))
 
 local buildStart = os.clock()
 PlotManager.init()
@@ -95,6 +102,7 @@ local function onPlayerAdded(player: Player)
 
 	PlayerStats.add(player)
 	PlayerStats.setThawed(player, IceField.progress(plot.field))
+	PlayerStats.setFinds(player, plot.finds.found, Discoveries.total(plot.finds))
 	player.RespawnLocation = plot.spawn
 
 	player.CharacterAdded:Connect(function(character)

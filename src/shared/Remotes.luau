@@ -61,6 +61,12 @@ function Remotes.swingResult(): RemoteEvent
 	return event("SwingResult")
 end
 
+-- Server -> client, owner only. Fired when the last of the ice over a buried
+-- find comes away: (position, label, reward, hero).
+function Remotes.discovery(): RemoteEvent
+	return event("Discovery")
+end
+
 -- Create every remote up front, before any client can ask for one.
 --
 -- The lazy path above is fine on the server, which creates on demand, but the
@@ -70,6 +76,7 @@ end
 function Remotes.initServer()
 	Remotes.swing()
 	Remotes.swingResult()
+	Remotes.discovery()
 end
 
 return Remotes

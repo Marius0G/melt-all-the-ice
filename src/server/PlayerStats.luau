@@ -28,6 +28,8 @@ function PlayerStats.add(player: Player)
 	player:SetAttribute("Stamina", Config.STAMINA_MAX)
 	player:SetAttribute("StaminaMax", Config.STAMINA_MAX)
 	player:SetAttribute("ThawedPct", 0)
+	player:SetAttribute("Found", 0)
+	player:SetAttribute("FoundTotal", 0)
 end
 
 function PlayerStats.remove(player: Player)
@@ -45,6 +47,11 @@ function PlayerStats.addMoney(player: Player, amount: number)
 	end
 	entry.money += amount
 	player:SetAttribute("Money", entry.money)
+end
+
+function PlayerStats.setFinds(player: Player, found: number, total: number)
+	player:SetAttribute("Found", found)
+	player:SetAttribute("FoundTotal", total)
 end
 
 function PlayerStats.setThawed(player: Player, fraction: number)

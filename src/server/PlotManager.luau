@@ -19,11 +19,13 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local GridMath = require(Shared:WaitForChild("GridMath"))
 
+local Discoveries = require(script.Parent:WaitForChild("Discoveries"))
 local IceField = require(script.Parent:WaitForChild("IceField"))
 
 export type Plot = {
 	index: number,
 	field: IceField.IceField,
+	finds: Discoveries.Field,
 	spawn: SpawnLocation,
 	glow: Folder,
 	owner: Player?,
@@ -114,16 +116,31 @@ local function makeGlacierGlow(index: number, origin: Vector3): Folder
 	return folder
 end
 
+-- Freeze the ice and scatter a fresh set of finds through it. The two have to
+-- happen together and in this order: placement may only claim cells that exist,
+-- so the grid has to be laid before anything can be buried in it.
+function PlotManager.rebuild(plot: Plot)
+	IceField.build(plot.field)
+	Discoveries.populate(plot.finds, plot.field.origin, function(cell)
+		return IceField.occupied(plot.field, cell)
+	end)
+end
+
 function PlotManager.init()
 	for index = 0, Config.PLOT_COUNT - 1 do
 		local field = IceField.new(index)
-		table.insert(plots, {
+		local plot: Plot = {
 			index = index,
 			field = field,
+			finds = Discoveries.new(index),
 			spawn = makeSpawn(index, field.origin),
 			glow = makeGlacierGlow(index, field.origin),
 			owner = nil,
-		})
+		}
+		Discoveries.populate(plot.finds, field.origin, function(cell)
+			return IceField.occupied(field, cell)
+		end)
+		table.insert(plots, plot)
 	end
 end
 
@@ -147,8 +164,9 @@ function PlotManager.release(player: Player)
 
 	byPlayer[player] = nil
 	plot.owner = nil
-	-- Re-freeze before it goes back in the pool (AD-3).
-	IceField.build(plot.field)
+	-- Re-freeze before it goes back in the pool (AD-3), finds included, so the
+	-- next player never inherits a half-looted cave.
+	PlotManager.rebuild(plot)
 end
 
 function PlotManager.get(player: Player): Plot?
