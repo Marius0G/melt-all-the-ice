@@ -19,10 +19,15 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
+local TweenService = game:GetService("TweenService")
+
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Feel = require(Shared:WaitForChild("Feel"))
 local GridMath = require(Shared:WaitForChild("GridMath"))
 local MapDefs = require(Shared:WaitForChild("MapDefs"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
+
+local SetPieces = require(script.Parent:WaitForChild("SetPieces"))
 
 local Finale = {}
 
@@ -31,6 +36,71 @@ local Finale = {}
 local RESET_DELAY = 14
 
 local celebrating: { [number]: boolean } = {}
+
+-- What each map's beacon looks like when it catches. The doc is explicit for
+-- the pyramid - "sa se aprinda varful priamidei" - and the cave's is the
+-- campfire from its end-state reference.
+local BEACON_COLOR: { [string]: Color3 } = {
+	cave = Color3.fromRGB(255, 158, 52),
+	pyramid = Color3.fromRGB(255, 208, 84),
+	troy = Color3.fromRGB(255, 244, 214),
+}
+
+-- Light the one Part the map's builder tagged. Nothing happens if a map has no
+-- beacon, which is a legitimate state rather than an error.
+local function lightBeacon(pieces: SetPieces.Field, map: MapDefs.MapDef)
+	local beacon = SetPieces.beacon(pieces)
+	if not beacon then
+		return
+	end
+
+	local tint = BEACON_COLOR[map.id] or Color3.fromRGB(255, 200, 38)
+
+	beacon.Material = Enum.Material.Neon
+	-- Tweened rather than snapped: this is the last beat of the map, and it
+	-- should read as catching rather than as a light switch.
+	TweenService:Create(beacon, TweenInfo.new(1.6, Enum.EasingStyle.Quad), { Color = tint }):Play()
+
+	local light = Instance.new("PointLight")
+	light.Name = "BeaconLight"
+	light.Color = tint
+	light.Range = 0
+	light.Brightness = 0
+	light.Shadows = false
+	light.Parent = beacon
+	TweenService:Create(light, TweenInfo.new(2.2, Enum.EasingStyle.Quad), {
+		Range = 120,
+		Brightness = 6,
+	}):Play()
+
+	local attachment = Instance.new("Attachment")
+	attachment.Parent = beacon
+
+	local embers = Instance.new("ParticleEmitter")
+	embers.Texture = Feel.TEXTURES.GLOW
+	embers.Rate = 26
+	embers.Lifetime = NumberRange.new(1.2, 2.4)
+	embers.Speed = NumberRange.new(4, 10)
+	embers.SpreadAngle = Vector2.new(26, 26)
+	embers.Acceleration = Vector3.new(0, 9, 0)
+	embers.Drag = 1.2
+	embers.LightEmission = 1
+	embers.LightInfluence = 0
+	embers.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 248, 214)),
+		ColorSequenceKeypoint.new(0.5, tint),
+		ColorSequenceKeypoint.new(1, tint:Lerp(Color3.new(0, 0, 0), 0.7)),
+	})
+	embers.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 2.4),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	embers.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.15),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	embers.Parent = attachment
+end
 
 -- Cut a shaft through the ceiling so daylight has a path in. Centred on the
 -- chamber and deliberately smaller than it, so the room stays a cave with a
@@ -59,6 +129,7 @@ function Finale.trigger(
 	plotIndex: number,
 	map: MapDefs.MapDef,
 	origin: Vector3,
+	pieces: SetPieces.Field,
 	found: number,
 	total: number
 ): boolean
@@ -68,6 +139,10 @@ function Finale.trigger(
 	celebrating[plotIndex] = true
 
 	openSkylight(map, origin)
+	-- Convenient accident of the existing geometry: the skylight is cut at 45%
+	-- of the ice span dead centre, which is exactly where the landmark stands -
+	-- so the daylight column lands on the thing that just lit up.
+	lightBeacon(pieces, map)
 	Remotes.finale():FireClient(player, map.label, found, total, RESET_DELAY)
 	return true
 end

@@ -159,6 +159,7 @@ local function resolveStrike(
 			index,
 			cleared,
 			plot.field.origin,
+			plot.pieces,
 			plot.finds.found,
 			Discoveries.total(plot.finds)
 		)

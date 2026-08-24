@@ -32,12 +32,14 @@ local modules = script.Parent
 local Discoveries = require(modules:WaitForChild("Discoveries"))
 local IceField = require(modules:WaitForChild("IceField"))
 local Meltwater = require(modules:WaitForChild("Meltwater"))
+local SetPieces = require(modules:WaitForChild("SetPieces"))
 
 export type Plot = {
 	index: number,
 	def: MapDefs.MapDef,
 	field: IceField.IceField,
 	finds: Discoveries.Field,
+	pieces: SetPieces.Field,
 	water: Meltwater.State,
 	spawn: SpawnLocation,
 	glow: Folder,
@@ -145,8 +147,20 @@ function PlotManager.rebuild(plot: Plot, def: MapDefs.MapDef?)
 	IceField.build(plot.field, plot.def)
 	Meltwater.setMap(plot.water, plot.def)
 	placeFurniture(plot)
-	Discoveries.populate(plot.finds, plot.def, plot.field.origin, function(cell)
-		return IceField.occupied(plot.field, cell)
+	-- Architecture before finds, because placement has to know which cells the
+	-- landmark already fills.
+	SetPieces.build(plot.pieces, plot.def, plot.field.origin)
+
+	local map = plot.def
+	local origin = plot.field.origin
+	Discoveries.populate(plot.finds, map, origin, function(cell)
+		if not IceField.occupied(plot.field, cell) then
+			return false
+		end
+		-- A find buried inside the pyramid could never be uncovered: melting the
+		-- ice around it just exposes stone.
+		local gx, gy, gz = GridMath.cellCoords(map, cell)
+		return not SetPieces.blocks(plot.pieces, GridMath.chunkCenter(map, origin, gx, gy, gz))
 	end)
 end
 
@@ -162,6 +176,7 @@ function PlotManager.init()
 			def = first,
 			field = field,
 			finds = Discoveries.new(index),
+			pieces = SetPieces.new(index),
 			water = Meltwater.new(field.origin, first),
 			spawn = makeSpawn(index),
 			glow = makeGlow(index),
@@ -206,6 +221,10 @@ function PlotManager.release(player: Player)
 	-- rebuilding here would be work thrown away the moment someone joins.
 	plot.def = MapDefs.FIRST
 	Discoveries.clear(plot.finds)
+	-- Must happen: IceField.clear refills the whole shell solid, so anything left
+	-- here would be entombed on an idle plot and then reappear inside whatever
+	-- map the next player loads.
+	SetPieces.clear(plot.pieces)
 	Meltwater.setMap(plot.water, plot.def)
 	IceField.clear(plot.field)
 end
