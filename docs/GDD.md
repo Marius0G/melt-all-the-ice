@@ -187,12 +187,42 @@ decides an outcome.
 
 ## Settled tuning
 
+Maps are data (`src/shared/MapDefs.luau`). Chunk size is per-map and is what keeps the
+larger maps affordable: Troy is nine times the cave's footprint for about twice the Parts.
+
+| Map | Chunk | Grid | Ice volume | Max chunks | $/chunk | Chunk HP |
+|---|---|---|---|---|---|---|
+| Cave | 4 | 16 x 6 x 16 | 64 x 24 x 64 | 1536 | 1 | 30 |
+| Pyramid | 8 | 24 x 5 x 24 | 192 x 40 x 192 | 2880 | 6 | 60 |
+| Troy | 8 | 28 x 5 x 28 | 224 x 40 x 224 | 3920 | 20 | 110 |
+
+Tools (`src/shared/Tools.luau`). Damage is set against each map's chunk HP so every tool
+lands on a whole hit count - a tool that takes 2.2 hits reads as inconsistent, because
+some chunks go in two and some in three for no reason the player can see.
+
+| Tool | Map | Damage | Gate | Cost | Area | Burns |
+|---|---|---|---|---|---|---|
+| Stone | Cave | 10 | stamina | 8 | - | - |
+| Axe | Cave | 20 | stamina | 9 | - | - |
+| Torch | Cave | 30 | fuel | 9 | - | - |
+| Campfire | Pyramid | 45 | fuel | 18 | r1 | x2 |
+| Ra's Scepter | Pyramid | 70 | fuel | 30 | r2 | x2 |
+| Greek Fire | Troy | 40 | fuel | 26 | r2 | x6 |
+| Chains of Kratos | Troy | 110 | fuel | 34 | r3 | x3 |
+
+The later tools escalate by **area**, not by a bigger number, which is what the source
+notes actually describe: campfires thawing "o anumita zona", a scepter that melts "super
+mult", greek fire that "arde incontinuu".
+
+Other settled values:
+
 | Value | Setting | Why |
 |---|---|---|
-| Chunk grid | 4 studs, 16 x 6 x 16 per cave plot | 4 studs is exactly one terrain voxel |
-| Plot count | 6, built lazily on join | Caps players/server; lazy build keeps idle cost at zero |
-| Chunk HP | 30 (stone does 10) | Three hits means three visible crack states, not one |
-| Ice look | Visible Parts, `SmoothPlastic`, ~0.25 transparent | Terrain's PBR grit fights the cartoony target |
+| Plot count | 6, built lazily on join | Caps players/server; idle plots hold nothing |
+| Plot spacing | 1024 studs | Must exceed the streaming radius and the widest map (304) |
+| Ice look | Visible Parts, `SmoothPlastic`, ~0.12 transparent | Terrain's PBR grit fights the cartoony target |
+| Stamina | 100 base, +12/s | Baseline; upgrades move it per player |
+| Fuel | 72 base, +9/s | Tuned so the torch beats the stone *sustained*, not just per swing |
 
 ## Still open
 
