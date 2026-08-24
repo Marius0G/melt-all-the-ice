@@ -164,7 +164,10 @@ local function placeFurniture(plot: Plot)
 		anchor.Parent = plot.glow
 
 		local light = Instance.new("PointLight")
-		light.Brightness = 0.75
+		-- Dimmer than it was. These used to be the cave's only light; now the
+		-- wall torches do that job and these just stop the far corners reading
+		-- as a void rather than as unlit blue ice.
+		light.Brightness = 0.3
 		light.Range = range
 		light.Color = Color3.fromRGB(150, 205, 255)
 		light.Shadows = false

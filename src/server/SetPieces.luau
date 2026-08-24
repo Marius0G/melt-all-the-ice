@@ -37,6 +37,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Feel = require(Shared:WaitForChild("Feel"))
 local GridMath = require(Shared:WaitForChild("GridMath"))
 local MapDefs = require(Shared:WaitForChild("MapDefs"))
 local PropAssets = require(Shared:WaitForChild("PropAssets"))
@@ -241,6 +242,205 @@ local function placeHuts(field: Field, map: MapDefs.MapDef, origin: Vector3, cou
 	end
 end
 
+-- A live flame: neon core, light, emitter. These light the cave now.
+--
+-- Parts rather than part of a mesh, for the same reason the tool flames are:
+-- they have to glow, cast light and emit, and none of that survives an FBX.
+local function flame(
+	field: Field,
+	at: Vector3,
+	size: number,
+	tint: Color3,
+	brightness: number,
+	range: number
+): BasePart
+	local ball = Instance.new("Part")
+	ball.Name = "Flame"
+	ball.Shape = Enum.PartType.Ball
+	ball.Size = Vector3.new(size, size, size)
+	ball.CFrame = CFrame.new(at)
+	ball.Color = tint
+	ball.Material = Enum.Material.Neon
+	ball.Anchored = true
+	ball.CanCollide = false
+	ball.CanQuery = false
+	ball.CanTouch = false
+	ball.CastShadow = false
+	ball.Parent = field.folder
+
+	local light = Instance.new("PointLight")
+	light.Brightness = brightness
+	light.Range = range
+	light.Color = tint
+	light.Shadows = false
+	light.Parent = ball
+
+	local attachment = Instance.new("Attachment")
+	attachment.Parent = ball
+
+	local fire = Instance.new("ParticleEmitter")
+	fire.Texture = Feel.TEXTURES.GLOW
+	fire.Rate = 14
+	fire.Lifetime = NumberRange.new(0.3, 0.7)
+	fire.Speed = NumberRange.new(1.0, 2.4)
+	fire.SpreadAngle = Vector2.new(16, 16)
+	fire.Acceleration = Vector3.new(0, 11, 0)
+	fire.LightEmission = 1
+	fire.LightInfluence = 0
+	fire.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, tint:Lerp(Color3.new(1, 1, 1), 0.55)),
+		ColorSequenceKeypoint.new(0.5, tint),
+		ColorSequenceKeypoint.new(1, tint:Lerp(Color3.new(0, 0, 0), 0.6)),
+	})
+	fire.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, size * 1.3),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	fire.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.25),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	fire.Parent = attachment
+
+	return ball
+end
+
+local FIRE_TINT = Color3.fromRGB(255, 168, 68)
+
+-- Bracket torches right around the chamber wall. The cave used to be lit only
+-- by invisible fill lights, which reads as an evenly grey room; a ring of real
+-- flames gives it warm pools, moving shadow, and somewhere for the eye to go.
+--
+-- Three per wall, not more: each is a PointLight, they exist once per plot, and
+-- Roblox starts dropping light quality well before a hundred are in view.
+local function placeWallTorches(field: Field, map: MapDefs.MapDef, origin: Vector3, stone: Color3)
+	local def = StructureAssets.get("walltorch")
+	if not def then
+		return
+	end
+	local ice = GridMath.iceSize(map)
+	local w = map.walkway
+	local minX, maxX = -w, ice.X + w
+	local minZ, maxZ = -w, ice.Z + w
+	local inset = 0.7
+	local height = math.min(10, map.ceilingGap * 0.45 + ice.Y * 0.3)
+
+	-- Each wall: where it sits, which way the bracket reaches, and whether the
+	-- run is along Z. CFrame.Angles(0, t, 0) turns local +Z toward +X at 90.
+	local walls = {
+		{ at = minX + inset, rot = math.pi / 2, alongZ = true },
+		{ at = maxX - inset, rot = -math.pi / 2, alongZ = true },
+		{ at = minZ + inset, rot = 0, alongZ = false },
+		{ at = maxZ - inset, rot = math.pi, alongZ = false },
+	}
+
+	for _, wall in walls do
+		for index = 1, 3 do
+			local t = (index - 0.5) / 3
+			local along = if wall.alongZ
+				then minZ + (maxZ - minZ) * t
+				else minX + (maxX - minX) * t
+			local footing = if wall.alongZ
+				then origin + Vector3.new(wall.at, height, along)
+				else origin + Vector3.new(along, height, wall.at)
+
+			local torch = place(field, def.meshId, "WallTorch", def.size, footing,
+				shade(stone, -0.35), Enum.Material.Metal, wall.rot)
+			if torch then
+				-- Top of the bowl, in the torch's own frame, so the rotation
+				-- carries the flame round with the bracket.
+				-- Tight and dim on purpose. Twelve torches at range 46 in a
+				-- 104-stud room all overlap, and the sum blew the cave to flat
+				-- white. A torch should carve a pool out of the dark, so the
+				-- range is barely wider than the pool it is meant to cast.
+				flame(field, torch.CFrame * Vector3.new(0, torch.Size.Y * 0.38, torch.Size.Z * 0.38),
+					1.15, FIRE_TINT, 1.05, 20)
+			end
+		end
+	end
+end
+
+-- Standing fire bowls out on the walkway, away from the walls.
+local function placeBraziers(field: Field, map: MapDefs.MapDef, origin: Vector3, stone: Color3)
+	local def = StructureAssets.get("brazier")
+	if not def then
+		return
+	end
+	local ice = GridMath.iceSize(map)
+	local w = map.walkway
+	local spots = {
+		Vector3.new(-w * 0.62, 0, ice.Z * 0.78),
+		Vector3.new(ice.X + w * 0.62, 0, ice.Z * 0.24),
+		Vector3.new(ice.X * 0.3, 0, ice.Z + w * 0.62),
+	}
+	for index, spot in spots do
+		local bowl = place(field, def.meshId, "Brazier", def.size, origin + spot,
+			shade(stone, -0.28), Enum.Material.Metal, index * 0.9)
+		if bowl then
+			flame(field, bowl.CFrame * Vector3.new(0, bowl.Size.Y * 0.46, 0),
+				1.7, FIRE_TINT, 1.45, 27)
+		end
+	end
+end
+
+-- Mine timbering across the walkway ring. Straight out of the games this genre
+-- grew from: a tunnel reads as worked the moment it has frames in it.
+local function placeTimbers(field: Field, map: MapDefs.MapDef, origin: Vector3, stone: Color3)
+	local def = StructureAssets.get("timber")
+	if not def then
+		return
+	end
+	local ice = GridMath.iceSize(map)
+	local w = map.walkway
+	local spots = {
+		{ offset = Vector3.new(-w * 0.5, 0, ice.Z * 0.45), rot = 0 },
+		{ offset = Vector3.new(ice.X + w * 0.5, 0, ice.Z * 0.62), rot = 0 },
+		{ offset = Vector3.new(ice.X * 0.62, 0, -w * 0.5), rot = math.pi / 2 },
+	}
+	-- Scaled up hard. At its authored 9 studs the frame sits below eye level in
+	-- a 48-stud room and reads as a bench, not as bracing; at 16 you walk under
+	-- it and it frames the walkway the way it is supposed to.
+	local scale = 1.8
+	for _, spot in spots do
+		place(field, def.meshId, "Timber", def.size * scale, origin + spot.offset,
+			shade(stone, -0.18), Enum.Material.Wood, spot.rot)
+	end
+end
+
+-- Palms and boulders over an open map's ground. Placed on a ring outside the
+-- walkway so nothing lands on the ice, and driven off the index rather than
+-- math.random so a rebuild reproduces it exactly (AD-3).
+local function placeDesertDressing(field: Field, map: MapDefs.MapDef, origin: Vector3, sand: Color3)
+	local ice = GridMath.iceSize(map)
+	local centre = origin + Vector3.new(ice.X / 2, 0, ice.Z / 2)
+	local inner = math.max(ice.X, ice.Z) / 2 + map.walkway + 12
+
+	local palm = StructureAssets.get("palm")
+	local rock = StructureAssets.get("boulder")
+
+	for index = 0, 21 do
+		local angle = index * 2.399963 -- golden angle, so the ring never lines up
+		local radius = inner + (index % 5) * 17 + math.abs(math.noise(index * 0.7, 0.3)) * 40
+		local spot = centre + Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+
+		-- Keep the approach from the spawn side clear.
+		if spot.X < origin.X - map.walkway and math.abs(spot.Z - centre.Z) < 26 then
+			continue
+		end
+
+		if palm and index % 2 == 0 then
+			local scale = 0.8 + (index % 4) * 0.14
+			place(field, palm.meshId, "Palm", palm.size * scale, spot,
+				shade(Color3.fromRGB(126, 152, 92), (index % 3) * 0.07 - 0.05),
+				Enum.Material.Grass, angle)
+		elseif rock then
+			local scale = 0.7 + (index % 5) * 0.2
+			place(field, rock.meshId, "Boulder", rock.size * scale, spot,
+				shade(sand, (index % 3) * 0.06 - 0.1), Enum.Material.Sandstone, angle)
+		end
+	end
+end
+
 -- ---------------------------------------------------------------------------
 -- cave
 -- ---------------------------------------------------------------------------
@@ -250,6 +450,9 @@ local function buildCave(field: Field, map: MapDefs.MapDef, origin: Vector3)
 	local stone = map.rockColor
 
 	placeSpawnPad(field, map, origin, stone)
+	placeWallTorches(field, map, origin, stone)
+	placeBraziers(field, map, origin, stone)
+	placeTimbers(field, map, origin, stone)
 
 	-- The fire ring from the end-state reference, on the -X strip well clear of
 	-- the spawn pad and the fill light directly above it.
@@ -347,6 +550,7 @@ local function buildPyramid(field: Field, map: MapDefs.MapDef, origin: Vector3)
 	end
 
 	placeHuts(field, map, origin, 9, sand)
+	placeDesertDressing(field, map, origin, sand)
 end
 
 -- ---------------------------------------------------------------------------
@@ -421,6 +625,7 @@ local function buildTroy(field: Field, map: MapDefs.MapDef, origin: Vector3)
 	end
 
 	placeHuts(field, map, origin, 7, shade(marble, -0.25))
+	placeDesertDressing(field, map, origin, marble)
 end
 
 -- ---------------------------------------------------------------------------
