@@ -72,29 +72,46 @@ python tools/devsync.py
 
 ## Asset pipeline
 
-Props are authored in Blender **headlessly** and uploaded once through Roblox Open Cloud.
+Every model in the game is authored in Blender **headlessly** and uploaded once through
+Roblox Open Cloud.
 
 ```bash
-# Build the meshes and look at them before uploading anything
-"/c/Program Files/Blender Foundation/Blender 5.1/blender.exe" \
-    -b -P assets/blender/props.py -- --out build/props.fbx --render build/preview
+BLENDER="/c/Program Files/Blender Foundation/Blender 5.1/blender.exe"
 
-# One upload covers every prop
-python tools/upload_assets.py build/props.fbx "MeltAllTheIce Props"
+# Build everything, dump the manifest, and render previews to look at first
+"$BLENDER" -b -P assets/blender/build.py -- --out build/models.fbx --dump build/models.json --render build/preview
+
+# One upload covers the lot
+python tools/upload_assets.py build/models.fbx "MeltAllTheIce Models"
 ```
 
-Roblox turns each mesh object in an FBX into its own `MeshPart` inside a single Model
-asset, so fourteen props cost one upload. The resulting mesh ids are read back out of the
-import and committed to `src/shared/PropAssets.luau` — the pipeline never has to run again
-to build the game.
+| File | Holds |
+|---|---|
+| `assets/blender/props.py` | The 16 finds buried in the ice, plus the shared primitive kit |
+| `assets/blender/tools.py` | The 7 tools, most as a haft and a head |
+| `assets/blender/structures.py` | Pyramid, Parthenon, acropolis, hut, causeway, campfire, spawn dais |
+| `assets/blender/build.py` | Combines all three, lays them out, exports, dumps, renders |
 
-Two things that will bite otherwise:
+Roblox turns each mesh object in an FBX into its own `MeshPart` inside a single Model asset,
+so 34 meshes cost one upload. The ids are read back out of the import and committed to
+`PropAssets`, `ToolAssets` and `StructureAssets` — the pipeline never has to run again to
+build the game.
 
-- **Blender exports FBX in centimetres**, so every mesh arrives 100× too big. `MeshPart.Size`
-  is writable and rescales the mesh, so authored dimensions are stored in `PropAssets` and
-  applied on creation.
+Three things that will bite otherwise:
+
+- **Never trust the imported dimensions.** Roblox normalises a whole model on import and the
+  factor depends on what else is in the file — adding the 128-stud pyramid changed it from
+  100x to about 15x. `build.py --dump` writes the exact authored sizes, and `MeshPart.Size`
+  is writable, so the authored numbers are what get applied.
+- **Objects in a group keep their relative positions.** A tool's haft and head are authored
+  around one origin; the manifest records the offset between their geometry centres, which is
+  what places one against the other in engine.
 - **No textures are exported, deliberately.** `MeshPart.Color` only applies to an untextured
   mesh, so colour stays in the palette with everything else.
+
+Some things stay Parts on purpose: the ice chunks (they are the raycast and HP units, and
+there are thousands of them), the finale beacons (the finale swaps them to Neon and hangs a
+light on them) and the tool flames (same reason, plus they are tinted per skin).
 
 Credentials live in `.env` (gitignored — never commit the key):
 
