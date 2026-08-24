@@ -22,6 +22,49 @@ Feel.ICE_MID = Color3.fromRGB(150, 214, 255)
 Feel.ICE_DEEP = Color3.fromRGB(90, 160, 210)
 Feel.ICE_SHADOW = Color3.fromRGB(27, 76, 120)
 Feel.MONEY = Color3.fromRGB(255, 200, 38)
+Feel.ROCK = Color3.fromRGB(96, 104, 118)
+Feel.ROCK_DARK = Color3.fromRGB(64, 70, 82)
+Feel.MELTWATER = Color3.fromRGB(56, 132, 176)
+
+--[[
+	Ice appearance.
+
+	SmoothPlastic rather than Glass. Glass is expensive and artefact-prone, and
+	there are around a thousand of these on screen; SmoothPlastic with a little
+	Reflectance reads as ice under the cave's lighting for a fraction of the
+	cost. Terrain Ice is not used at all any more - its PBR grit is the single
+	thing that fights the cartoony target hardest.
+
+	The three stages are read from remaining HP, so a chunk visibly frosts over
+	and shrinks as it fractures. Shrinking is the honest cue: unlike a stage
+	swap it is continuous, so it still reads when a stronger tool skips a stage.
+	Kept mild - the parts are also the raycast targets, and shrinking them far
+	would open gaps a ray could slip between.
+]]
+--
+-- Transparency is deliberately low. It started at 0.28, which looks reasonable
+-- written down and renders as fog: because the occluded interior is culled, a
+-- see-through shell shows the far inner wall straight through the near one, and
+-- the whole block turns into a milky haze with no readable faces. Near-opaque
+-- ice reads as ice. Seeing what is buried is handled by surface hints instead,
+-- which works at any depth rather than only for the first chunk or two.
+Feel.ICE_MATERIAL = Enum.Material.SmoothPlastic
+Feel.ICE_REFLECTANCE = 0.2
+-- Per-chunk tint variation, so a flat wall of identical cubes reads as crystal
+-- facets instead of one poured surface. Deterministic from grid position, so a
+-- rebuild reproduces the same pattern.
+Feel.ICE_FACET_JITTER = 0.07
+--
+-- Thresholds are set from the HP ratios a chunk actually passes through, not
+-- from round numbers. At CHUNK_HP 30 and STONE_DAMAGE 10 those ratios are
+-- 1.0 -> 0.667 -> 0.333, so the boundaries sit between them. Picking 0.66 here
+-- looks reasonable and is wrong: 0.667 clears it, the first hit changes nothing
+-- visible, and three hits collapse back into two states.
+Feel.ICE_STAGES = {
+	{ above = 0.80, color = Color3.fromRGB(126, 196, 246), transparency = 0.12, scale = 1.00 },
+	{ above = 0.45, color = Color3.fromRGB(176, 224, 252), transparency = 0.08, scale = 0.96 },
+	{ above = -1, color = Color3.fromRGB(226, 245, 255), transparency = 0.04, scale = 0.90 },
+}
 
 -- Swing arc. The Trail default lifetime is 2.0, which smears into a ribbon that
 -- never catches up with the swing; 0.18 reads as a single crisp arc.

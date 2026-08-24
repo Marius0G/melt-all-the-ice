@@ -28,7 +28,18 @@ function GridMath.iceSize(): Vector3
 	)
 end
 
-function GridMath.chunkCount(): number
+-- Height in chunks of the ice column at (gx, gz). Uneven, so the top of the
+-- block undulates instead of being a flat lid. Pure noise, so it is identical
+-- every rebuild and the same on server and client.
+function GridMath.columnHeight(gx: number, gz: number): number
+	local n = math.noise(gx * 0.17, gz * 0.17, 0.5) -- roughly -0.5 .. 0.5
+	local relief = (n + 0.5) * Config.ICE_RELIEF
+	return math.clamp(Config.GRID_Y - math.floor(relief + 0.5), 1, Config.GRID_Y)
+end
+
+-- Upper bound only. The real total is counted while building, because the
+-- columns are not all full height.
+function GridMath.maxChunkCount(): number
 	return Config.GRID_X * Config.GRID_Y * Config.GRID_Z
 end
 

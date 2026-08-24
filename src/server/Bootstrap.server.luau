@@ -27,7 +27,12 @@ Players.CharacterAutoLoads = false
 -- Before anything else: clients block on WaitForChild for these.
 Remotes.initServer()
 
-Ambience.apply()
+-- Cosmetic setup must never be able to take the server down with it. An
+-- unsupported enum in here once aborted Bootstrap before a single plot was
+-- built, which presents as an empty world rather than as a lighting bug.
+xpcall(Ambience.apply, function(err)
+	warn("[MeltAllTheIce] ambience failed: " .. tostring(err))
+end)
 
 -- Cave acoustics, one line. Applies to every 3D sound in the place.
 SoundService.AmbientReverb = Enum.ReverbType.Cave

@@ -25,6 +25,7 @@ export type Plot = {
 	index: number,
 	field: IceField.IceField,
 	spawn: SpawnLocation,
+	glow: Folder,
 	owner: Player?,
 }
 
@@ -52,14 +53,65 @@ local function makeSpawn(index: number, origin: Vector3): SpawnLocation
 	-- The only warm light in a sealed rock chamber, standing in for the lantern
 	-- in docs/reference/cave-mid-state.png. Gives the player somewhere legible
 	-- to start from before any light-bearing tool exists.
+	-- Kept as a pool rather than area lighting. At range 34 this was the only
+	-- light in a black cave, so it lit the whole floor orange and every surface
+	-- in the room took its colour - grey rock rendered brown and the ice went
+	-- yellow. Tighter and slightly cooler, it reads as a lantern again and lets
+	-- the cold ambient own everything outside its reach.
 	local glow = Instance.new("PointLight")
 	glow.Name = "SpawnGlow"
-	glow.Brightness = 1.4
-	glow.Range = 34
-	glow.Color = Color3.fromRGB(255, 176, 104)
+	glow.Brightness = 2
+	glow.Range = 24
+	glow.Color = Color3.fromRGB(255, 196, 142)
 	glow.Parent = spawn
 
 	return spawn
+end
+
+-- Cold fill light for the chamber, so the ice reads as a luminous mass rather
+-- than a black silhouette on its unlit faces.
+--
+-- Placed in the air around the block, never inside it. Lights buried in the ice
+-- lit every face by the same amount and flattened the whole thing into one
+-- cyan slab with no edges - form comes from faces catching different amounts,
+-- which needs the light to be somewhere the block is not.
+local function makeGlacierGlow(index: number, origin: Vector3): Folder
+	local folder = Instance.new("Folder")
+	folder.Name = string.format("Plot%d_Glow", index)
+	folder.Parent = Workspace
+
+	local ice = GridMath.iceSize()
+	local spots = {
+		-- Two high in the ceiling gap, offset so the top and the two near faces
+		-- each take a different value.
+		origin + Vector3.new(ice.X * 0.25, ice.Y + Config.CEILING_GAP * 0.6, ice.Z * 0.3),
+		origin + Vector3.new(ice.X * 0.75, ice.Y + Config.CEILING_GAP * 0.6, ice.Z * 0.75),
+		-- One low on the walkway, throwing light up the working face.
+		origin + Vector3.new(-Config.WALKWAY * 0.5, ice.Y * 0.25, ice.Z * 0.5),
+	}
+
+	for spotIndex, position in spots do
+		local anchor = Instance.new("Part")
+		anchor.Name = string.format("Glow%d", spotIndex)
+		anchor.Size = Vector3.new(1, 1, 1)
+		anchor.CFrame = CFrame.new(position)
+		anchor.Anchored = true
+		anchor.CanCollide = false
+		anchor.CanQuery = false -- must never eat a melt raycast
+		anchor.CanTouch = false
+		anchor.CastShadow = false
+		anchor.Transparency = 1
+		anchor.Parent = folder
+
+		local light = Instance.new("PointLight")
+		light.Brightness = 0.55
+		light.Range = 44
+		light.Color = Color3.fromRGB(150, 205, 255)
+		light.Shadows = false
+		light.Parent = anchor
+	end
+
+	return folder
 end
 
 function PlotManager.init()
@@ -69,6 +121,7 @@ function PlotManager.init()
 			index = index,
 			field = field,
 			spawn = makeSpawn(index, field.origin),
+			glow = makeGlacierGlow(index, field.origin),
 			owner = nil,
 		})
 	end

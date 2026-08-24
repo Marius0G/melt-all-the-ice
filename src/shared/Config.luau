@@ -17,6 +17,10 @@ local Config = {
 	GRID_X = 16,
 	GRID_Y = 6,
 	GRID_Z = 16,
+	-- How many chunk layers the top surface may be eaten away by, so the ice
+	-- reads as a glacier rather than a spawned cuboid. Deterministic from grid
+	-- position, so a rebuild reproduces the same shape (AD-3).
+	ICE_RELIEF = 3,
 
 	-- Plots (AD-2). PLOT_COUNT caps players per server.
 	-- PLOT_SPACING must stay above Workspace.StreamingTargetRadius (512, set in
@@ -31,8 +35,11 @@ local Config = {
 	CEILING_GAP = 8, -- air above the ice
 	SHELL = 8, -- rock thickness around the chamber
 
-	-- Melting economy.
-	CHUNK_HP = 20,
+	-- Melting economy. CHUNK_HP/STONE_DAMAGE decides how many hits a chunk
+	-- takes, and that count is what the player actually feels. Three is the
+	-- floor for legible progress - at two there is only one intermediate state
+	-- to see, which reads as a chunk flicking between "fine" and "gone".
+	CHUNK_HP = 30,
 	STONE_DAMAGE = 10,
 	MONEY_PER_CHUNK = 1,
 
