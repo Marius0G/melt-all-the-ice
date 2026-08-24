@@ -32,9 +32,9 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Config = require(Shared:WaitForChild("Config"))
 local Feel = require(Shared:WaitForChild("Feel"))
 local GridMath = require(Shared:WaitForChild("GridMath"))
+local MapDefs = require(Shared:WaitForChild("MapDefs"))
 local PropAssets = require(Shared:WaitForChild("PropAssets"))
 
 export type Buried = {
@@ -53,18 +53,6 @@ export type Field = {
 }
 
 local Discoveries = {}
-
--- What a cave contains. Repeats are deliberate: the common finds have to be
--- common enough that melting keeps paying out between the two hero finds.
-local MANIFEST = {
-	{ key = "Mammoth", count = 1 },
-	{ key = "FrozenPerson", count = 1 },
-	{ key = "BonePile", count = 2 },
-	{ key = "Chest", count = 2 },
-	{ key = "CrystalCluster", count = 3 },
-	{ key = "Pot", count = 2 },
-	{ key = "Stalagmite", count = 3 },
-}
 
 local PLACEMENT_ATTEMPTS = 60
 
@@ -107,12 +95,14 @@ local function template(def: PropAssets.PropDef): BasePart?
 	return mesh
 end
 
--- How many cells the prop spans on each axis, at least one.
-local function footprint(def: PropAssets.PropDef): (number, number, number)
-	local size = def.size
-	return math.max(1, math.ceil(size.X / Config.CHUNK_SIZE)),
-		math.max(1, math.ceil(size.Y / Config.CHUNK_SIZE)),
-		math.max(1, math.ceil(size.Z / Config.CHUNK_SIZE))
+-- How many cells the prop spans on each axis, at least one. Depends on the
+-- map, since a prop that fills two cells on a 4-stud grid fills one on an
+-- 8-stud grid.
+local function footprint(prop: PropAssets.PropDef, map: MapDefs.MapDef): (number, number, number)
+	local size = prop.size
+	return math.max(1, math.ceil(size.X / map.chunkSize)),
+		math.max(1, math.ceil(size.Y / map.chunkSize)),
+		math.max(1, math.ceil(size.Z / map.chunkSize))
 end
 
 local function makeHint(position: Vector3, parent: Instance): Attachment
@@ -183,7 +173,12 @@ end
 
 -- Lay out a fresh set of finds. Called from IceField.build, after the grid
 -- exists, so placement can check which cells are actually solid ice.
-function Discoveries.populate(field: Field, origin: Vector3, occupied: (number) -> boolean)
+function Discoveries.populate(
+	field: Field,
+	map: MapDefs.MapDef,
+	origin: Vector3,
+	occupied: (number) -> boolean
+)
 	field.folder:ClearAllChildren()
 	table.clear(field.byCell)
 	table.clear(field.all)
@@ -192,7 +187,7 @@ function Discoveries.populate(field: Field, origin: Vector3, occupied: (number) 
 	local rng = Random.new()
 	local claimed: { [number]: boolean } = {}
 
-	for _, entry in MANIFEST do
+	for _, entry in map.props do
 		local def = PropAssets.get(entry.key)
 		if not def then
 			continue
@@ -202,23 +197,23 @@ function Discoveries.populate(field: Field, origin: Vector3, occupied: (number) 
 			continue
 		end
 
-		local spanX, spanY, spanZ = footprint(def)
+		local spanX, spanY, spanZ = footprint(def, map)
 
 		for _ = 1, entry.count do
 			local placedCells: { number }? = nil
 			local originCell: (Vector3)? = nil
 
 			for _ = 1, PLACEMENT_ATTEMPTS do
-				local gx = rng:NextInteger(0, Config.GRID_X - spanX)
-				local gz = rng:NextInteger(0, Config.GRID_Z - spanZ)
-				local gy = rng:NextInteger(0, Config.GRID_Y - spanY)
+				local gx = rng:NextInteger(0, map.grid.X - spanX)
+				local gz = rng:NextInteger(0, map.grid.Z - spanZ)
+				local gy = rng:NextInteger(0, map.grid.Y - spanY)
 
 				local cells = {}
 				local ok = true
 				for dx = 0, spanX - 1 do
 					for dy = 0, spanY - 1 do
 						for dz = 0, spanZ - 1 do
-							local cell = GridMath.cellIndex(gx + dx, gy + dy, gz + dz)
+							local cell = GridMath.cellIndex(map, gx + dx, gy + dy, gz + dz)
 							-- Must be solid ice and not already spoken for, or
 							-- two props would share a cell and the second could
 							-- never reach zero.
@@ -249,8 +244,8 @@ function Discoveries.populate(field: Field, origin: Vector3, occupied: (number) 
 				part.Name = def.key -- so a plot folder is readable when inspected
 				local base = originCell :: Vector3
 				-- Centre of the claimed block of cells.
-				local centre = GridMath.chunkCenter(origin, base.X, base.Y, base.Z)
-					+ Vector3.new(spanX - 1, spanY - 1, spanZ - 1) * (Config.CHUNK_SIZE * 0.5)
+				local centre = GridMath.chunkCenter(map, origin, base.X, base.Y, base.Z)
+					+ Vector3.new(spanX - 1, spanY - 1, spanZ - 1) * (map.chunkSize * 0.5)
 				part.CFrame = CFrame.new(centre) * CFrame.Angles(0, rng:NextNumber() * math.pi * 2, 0)
 				part.Parent = field.folder
 
@@ -269,7 +264,7 @@ function Discoveries.populate(field: Field, origin: Vector3, occupied: (number) 
 
 				-- Hint sits on the ice surface directly above the find, so the
 				-- player can spot it before committing a minute to digging.
-				local surfaceY = GridMath.columnHeight(base.X, base.Z) * Config.CHUNK_SIZE
+				local surfaceY = GridMath.columnHeight(map, base.X, base.Z) * map.chunkSize
 				buried.hint = makeHint(
 					Vector3.new(centre.X, origin.Y + surfaceY + 0.6, centre.Z),
 					field.folder

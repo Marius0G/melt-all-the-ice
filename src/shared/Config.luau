@@ -1,49 +1,38 @@
 --!strict
 --[[
-	Config - every tuning knob for the cave vertical slice.
+	Config - the tuning that is genuinely global.
 
-	Grid resolution and plot count are settled design calls (docs/GDD.md AD-1,
-	AD-2). The economy and stamina numbers are opening guesses meant to be
-	felt out in playtest.
+	Most of what used to live here moved out when maps became data (AD-4), and
+	the split is worth stating so things get added back in the right place:
 
-	CHUNK_SIZE must stay a multiple of 4. Roblox terrain voxels are 4x4x4
-	studs, so any other value makes Terrain:FillBlock bleed into neighbouring
-	chunks' voxels and leaves ragged edges behind every melt.
+	    MapDefs   anything that differs per map - grid size, chunk size, shell
+	              material, palette, what is buried in it, what a chunk pays
+	    Tools     anything that differs per tool - damage, reach, cooldown,
+	              which gate it spends and how much of it
+	    Feel      anything about presentation - shake, particles, sound, timing
+	    here      the rest: the plot pool, and the baseline for the two gates
+
+	The gate values here are baselines, not limits. Upgrades move them per
+	player (see Progression), so nothing should read these expecting the number
+	a given player actually has.
 ]]
 
 local Config = {
-	-- Ice grid (AD-1). 4 studs is exactly one terrain voxel.
-	CHUNK_SIZE = 4,
-	GRID_X = 16,
-	GRID_Y = 6,
-	GRID_Z = 16,
-	-- How many chunk layers the top surface may be eaten away by, so the ice
-	-- reads as a glacier rather than a spawned cuboid. Deterministic from grid
-	-- position, so a rebuild reproduces the same shape (AD-3).
-	ICE_RELIEF = 3,
-
-	-- Plots (AD-2). PLOT_COUNT caps players per server.
+	-- Plots (AD-2). PLOT_COUNT caps players per server, because terrain and
+	-- Part cost scale with plots x map size.
+	--
 	-- PLOT_SPACING must stay above Workspace.StreamingTargetRadius (512, set in
 	-- default.project.json) or clients stream in their neighbours' plots -
-	-- thousands of parts nobody can see. It also has to leave room for the
-	-- largest map, not just the cave.
+	-- thousands of parts nobody can see. It also has to clear the largest map:
+	-- Troy is 304 studs across including its shell.
 	PLOT_COUNT = 6,
 	PLOT_SPACING = 1024,
 
-	-- Cave shell, in studs. All multiples of CHUNK_SIZE to stay voxel-aligned.
-	WALKWAY = 12, -- air ring around the ice, at floor level
-	CEILING_GAP = 8, -- air above the ice
-	SHELL = 8, -- rock thickness around the chamber
+	-- Stamina gate, for the physical tools. Baseline only.
+	STAMINA_MAX = 100,
+	STAMINA_REGEN = 12, -- per second
 
-	-- Melting economy. CHUNK_HP/STONE_DAMAGE decides how many hits a chunk
-	-- takes, and that count is what the player actually feels. Three is the
-	-- floor for legible progress - at two there is only one intermediate state
-	-- to see, which reads as a chunk flicking between "fine" and "gone".
-	CHUNK_HP = 30,
-	STONE_DAMAGE = 10,
-	MONEY_PER_CHUNK = 1,
-
-	-- Fuel gate, for fire tools.
+	-- Fuel gate, for the fire tools. Baseline only.
 	--
 	-- Tuned against sustained throughput, not burst. At regen 4 the torch was
 	-- 0.44 chunks/second against the stone's 0.62 - it felt stronger per swing
@@ -52,13 +41,6 @@ local Config = {
 	-- the full bar still empties in eight fast swings so the gate is real.
 	FUEL_MAX = 72,
 	FUEL_REGEN = 9, -- per second
-
-	-- Stamina gate.
-	STAMINA_MAX = 100,
-	STAMINA_PER_SWING = 8,
-	STAMINA_REGEN = 12, -- per second
-	SWING_COOLDOWN = 0.45,
-	MAX_REACH = 24,
 }
 
 return table.freeze(Config)

@@ -20,8 +20,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Config = require(Shared:WaitForChild("Config"))
 local GridMath = require(Shared:WaitForChild("GridMath"))
+local MapDefs = require(Shared:WaitForChild("MapDefs"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 
 local Finale = {}
@@ -35,16 +35,16 @@ local celebrating: { [number]: boolean } = {}
 -- Cut a shaft through the ceiling so daylight has a path in. Centred on the
 -- chamber and deliberately smaller than it, so the room stays a cave with a
 -- hole in it rather than becoming an open pit.
-local function openSkylight(origin: Vector3)
-	local ice = GridMath.iceSize()
-	local _, chamberSize = GridMath.chamberBox(origin)
+local function openSkylight(map: MapDefs.MapDef, origin: Vector3)
+	local ice = GridMath.iceSize(map)
+	local _, chamberSize = GridMath.chamberBox(map, origin)
 
 	local width = ice.X * 0.45
 	local depth = ice.Z * 0.45
 	-- From just under the ceiling up through the shell, plus margin so the cut
 	-- clears the rock entirely rather than leaving a thin lid.
-	local floor = origin.Y + chamberSize.Y - Config.CHUNK_SIZE
-	local height = Config.SHELL + Config.CHUNK_SIZE * 3
+	local floor = origin.Y + chamberSize.Y - map.chunkSize
+	local height = map.shell + map.chunkSize * 3
 
 	Workspace.Terrain:FillBlock(
 		CFrame.new(origin + Vector3.new(ice.X / 2, floor + height / 2, ice.Z / 2)),
@@ -54,14 +54,21 @@ local function openSkylight(origin: Vector3)
 end
 
 -- Fire once per clearing. Returns true if this call was the one that triggered.
-function Finale.trigger(player: Player, plotIndex: number, origin: Vector3, found: number, total: number): boolean
+function Finale.trigger(
+	player: Player,
+	plotIndex: number,
+	map: MapDefs.MapDef,
+	origin: Vector3,
+	found: number,
+	total: number
+): boolean
 	if celebrating[plotIndex] then
 		return false
 	end
 	celebrating[plotIndex] = true
 
-	openSkylight(origin)
-	Remotes.finale():FireClient(player, found, total, RESET_DELAY)
+	openSkylight(map, origin)
+	Remotes.finale():FireClient(player, map.label, found, total, RESET_DELAY)
 	return true
 end
 

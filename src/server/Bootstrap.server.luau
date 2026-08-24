@@ -75,7 +75,7 @@ local function onCharacterAdded(player: Player, character: Model)
 	-- Placing the character explicitly rather than trusting SpawnLocation
 	-- selection keeps a player pinned to their own plot even if respawn
 	-- assignment races. Facing +X puts the ice face dead ahead.
-	local position = GridMath.spawnPosition(plot.field.origin) + Vector3.new(0, 4, 0)
+	local position = GridMath.spawnPosition(plot.def, plot.field.origin) + Vector3.new(0, 4, 0)
 	character:PivotTo(CFrame.lookAt(position, position + Vector3.new(1, 0, 0)))
 
 	-- Hand back everything they own, and put the best of it in their hands.
@@ -107,18 +107,19 @@ local function onCharacterAdded(player: Player, character: Model)
 end
 
 local function onPlayerAdded(player: Player)
-	local plot = PlotManager.allocate(player)
+	-- Load before allocating: which map the plot should be built as depends on
+	-- what this player has unlocked, so the save has to be read first.
+	local save = SaveService.load(player)
+	Progression.add(player, save.upgrades, save.unlockedMaps)
+	PlayerStats.add(player, save.money)
+
+	local plot = PlotManager.allocate(player, Progression.currentMap(player))
 	if not plot then
+		PlayerStats.remove(player)
+		Progression.remove(player)
 		player:Kick("All plots on this server are taken - please rejoin for another server.")
 		return
 	end
-
-	-- Load before anything reads a level or a balance. Never returns nil: a
-	-- player whose data cannot be read starts fresh and plays rather than being
-	-- turned away.
-	local save = SaveService.load(player)
-	Progression.add(player, save.upgrades)
-	PlayerStats.add(player, save.money)
 	PlayerStats.setThawed(player, IceField.progress(plot.field))
 	PlayerStats.setFinds(player, plot.finds.found, Discoveries.total(plot.finds))
 	player.RespawnLocation = plot.spawn
@@ -138,9 +139,9 @@ local function collect(player: Player): SaveService.Save
 		version = 1,
 		money = if stats then stats.money else 0,
 		upgrades = Progression.levels(player),
-		-- Map progress is deliberately absent: plots re-freeze on release
-		-- (AD-3), so a map always begins frozen.
-		unlockedMaps = { cave = true },
+		-- Which maps are unlocked persists; how far through one you were does
+		-- not. Plots re-freeze on release (AD-3), so a map always begins frozen.
+		unlockedMaps = Progression.unlockedMaps(player),
 	}
 end
 

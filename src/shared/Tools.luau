@@ -32,6 +32,16 @@ export type ToolDef = {
 	reach: number,
 	order: number, -- higher is better; used to pick what to equip
 	light: boolean, -- does carrying it light the cave
+	-- Radius in chunks affected around the one struck. 0 is a single chunk.
+	-- This is how the later tools escalate: the design doc has campfires
+	-- thawing "o anumita zona" and Ra's scepter melting "super mult", which is
+	-- an area, not a bigger number.
+	aoe: number,
+	-- How many times the strike repeats. Greek fire "arde incontinuu pt o
+	-- juma de minut", so it keeps burning after the swing rather than landing
+	-- once.
+	burnTicks: number,
+	burnInterval: number,
 }
 
 local Tools = {}
@@ -50,6 +60,9 @@ local DEFS: { ToolDef } = {
 		reach = 24,
 		order = 1,
 		light = false,
+		aoe = 0,
+		burnTicks = 1,
+		burnInterval = 0,
 	},
 	{
 		key = "axe",
@@ -62,6 +75,9 @@ local DEFS: { ToolDef } = {
 		reach = 26,
 		order = 2,
 		light = false,
+		aoe = 0,
+		burnTicks = 1,
+		burnInterval = 0,
 	},
 	{
 		key = "torch",
@@ -74,6 +90,77 @@ local DEFS: { ToolDef } = {
 		reach = 22,
 		order = 3,
 		light = true,
+		aoe = 0,
+		burnTicks = 1,
+		burnInterval = 0,
+	},
+
+	-- Pyramid. "incepi sa faci focuri de tabara care dezgheata o anumita zona
+	-- (e o abilitate gen) ... ultima arma o sa fie scpetrul lui [Ra] cu care
+	-- poti sa dezgheti super mult".
+	{
+		key = "campfire",
+		label = "Campfire",
+		tooltip = "Sets a blaze that thaws everything around it.",
+		damage = 45,
+		gate = "fuel",
+		cost = 18,
+		cooldown = 0.55,
+		reach = 26,
+		order = 4,
+		light = true,
+		aoe = 1,
+		burnTicks = 2,
+		burnInterval = 0.35,
+	},
+	{
+		key = "scepter",
+		label = "Ra's Scepter",
+		tooltip = "The sun god's own. Melts a huge span at once.",
+		damage = 70,
+		gate = "fuel",
+		cost = 30,
+		cooldown = 0.7,
+		reach = 34,
+		order = 5,
+		light = true,
+		aoe = 2,
+		burnTicks = 2,
+		burnInterval = 0.3,
+	},
+
+	-- Troy. "greek fire care e un foc care arde incontinuu pt o juma de minut
+	-- si e verde ... si dupa ai lanturile lui kratos care o sa fie si mai
+	-- broken".
+	{
+		key = "greekfire",
+		label = "Greek Fire",
+		tooltip = "Green fire that will not go out. Keeps burning where it lands.",
+		damage = 40,
+		gate = "fuel",
+		cost = 26,
+		cooldown = 0.8,
+		reach = 30,
+		order = 6,
+		light = true,
+		aoe = 2,
+		burnTicks = 6,
+		burnInterval = 0.45,
+	},
+	{
+		key = "chains",
+		label = "Chains of Kratos",
+		tooltip = "Absurd. Rips a crater out of the ice.",
+		damage = 110,
+		gate = "fuel",
+		cost = 34,
+		cooldown = 0.75,
+		reach = 38,
+		order = 7,
+		light = true,
+		aoe = 3,
+		burnTicks = 3,
+		burnInterval = 0.3,
 	},
 }
 
@@ -92,6 +179,10 @@ end
 local GRANTED_BY: { [string]: string } = {
 	axe = "axe",
 	torch = "torch",
+	campfire = "campfire",
+	scepter = "scepter",
+	greekfire = "greekfire",
+	chains = "chains",
 }
 Tools.GRANTED_BY = GRANTED_BY
 

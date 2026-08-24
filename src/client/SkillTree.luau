@@ -93,7 +93,7 @@ local function levelOf(key: string): number
 	return if typeof(value) == "number" then value else 0
 end
 
-local function buildNode(parent: Frame, def: Upgrades.UpgradeDef, row: number)
+local function buildNode(parent: GuiObject, def: Upgrades.UpgradeDef, row: number)
 	local tint = Upgrades.BRANCH_COLOR[def.branch]
 
 	local button = Instance.new("TextButton")
@@ -316,7 +316,7 @@ local function build()
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Parent = columns
 
-	local byBranch: { [string]: Frame } = {}
+	local byBranch: { [string]: GuiObject } = {}
 	for order, branch in Upgrades.BRANCH_ORDER do
 		local column = Instance.new("Frame")
 		column.Name = branch
@@ -334,12 +334,25 @@ local function build()
 		label.Text = Upgrades.BRANCH_LABEL[branch]
 		label.Parent = column
 
-		local holder = Instance.new("Frame")
+		-- Scrolls, because the craft branch runs the length of all three maps
+		-- and will not fit a column on a phone.
+		local holder = Instance.new("ScrollingFrame")
 		holder.Name = "Nodes"
 		holder.Size = UDim2.new(1, 0, 1, -26)
 		holder.Position = UDim2.fromOffset(0, 26)
 		holder.BackgroundTransparency = 1
+		holder.BorderSizePixel = 0
+		holder.ScrollBarThickness = 4
+		holder.ScrollBarImageColor3 = GOLD_DARK
+		holder.CanvasSize = UDim2.new()
+		holder.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		holder.ScrollingDirection = Enum.ScrollingDirection.Y
 		holder.Parent = column
+
+		local holderPad = Instance.new("UIPadding")
+		holderPad.PaddingRight = UDim.new(0, 8)
+		holderPad.PaddingBottom = UDim.new(0, 8)
+		holderPad.Parent = holder
 
 		byBranch[branch] = holder
 	end

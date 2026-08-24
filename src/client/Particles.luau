@@ -185,12 +185,19 @@ function Particles.reveal(position: Vector3)
 	fire(attachment, { sparkEmitter(), puffEmitter() }, { Feel.SPARKS_ON_REVEAL, 10 })
 end
 
-function Particles.shatter(position: Vector3, normal: Vector3)
+-- `broke` is how many chunks went at once. An area tool taking out a dozen
+-- should look like it, but the count is capped so a Chains of Kratos crater
+-- does not put a thousand particles on a phone.
+function Particles.shatter(position: Vector3, normal: Vector3, broke: number?)
 	if not withinRange(position) then
 		return
 	end
+	local scale = math.clamp(1 + ((broke or 1) - 1) * 0.25, 1, 3)
 	local attachment = orientedAttachment(position, normal)
-	fire(attachment, { shardEmitter(), puffEmitter() }, { Feel.SHARDS_ON_KILL, Feel.PUFF_ON_KILL })
+	fire(attachment, { shardEmitter(), puffEmitter() }, {
+		math.floor(Feel.SHARDS_ON_KILL * scale),
+		math.floor(Feel.PUFF_ON_KILL * scale),
+	})
 end
 
 function Particles.chip(position: Vector3, normal: Vector3)

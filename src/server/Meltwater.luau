@@ -32,25 +32,29 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Config = require(Shared:WaitForChild("Config"))
 local GridMath = require(Shared:WaitForChild("GridMath"))
+local MapDefs = require(Shared:WaitForChild("MapDefs"))
 
 local Meltwater = {}
 
-local MAX_DEPTH = Config.CHUNK_SIZE -- one chunk, wading depth
-
 export type State = {
 	origin: Vector3,
+	def: MapDefs.MapDef,
 	depth: number,
 }
 
-function Meltwater.new(origin: Vector3): State
-	return { origin = origin, depth = 0 }
+function Meltwater.new(origin: Vector3, def: MapDefs.MapDef): State
+	return { origin = origin, def = def, depth = 0 }
+end
+
+function Meltwater.setMap(state: State, def: MapDefs.MapDef)
+	state.def = def
+	state.depth = 0
 end
 
 -- Set the pool from progress. Returns true when the level actually moved.
 function Meltwater.update(state: State, fraction: number): boolean
-	local target = math.floor(math.clamp(fraction, 0, 1) * MAX_DEPTH + 0.5)
+	local target = math.floor(math.clamp(fraction, 0, 1) * state.def.waterDepth + 0.5)
 	if target == state.depth then
 		return false
 	end
@@ -59,7 +63,7 @@ function Meltwater.update(state: State, fraction: number): boolean
 		return true
 	end
 
-	local ice = GridMath.iceSize()
+	local ice = GridMath.iceSize(state.def)
 	local size = Vector3.new(ice.X, target, ice.Z)
 	local centre = state.origin + Vector3.new(ice.X / 2, target / 2, ice.Z / 2)
 	Workspace.Terrain:FillBlock(CFrame.new(centre), size, Enum.Material.Water)

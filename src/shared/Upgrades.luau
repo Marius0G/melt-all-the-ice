@@ -116,6 +116,55 @@ local DEFS: { UpgradeDef } = {
 		requires = "axe",
 		requiresLevel = 1,
 	},
+
+	-- Pyramid. Priced against that map's economy: a chunk there pays six times
+	-- a cave chunk, so its tools cost roughly six times as much.
+	{
+		key = "campfire",
+		branch = "craft",
+		label = "Campfire",
+		blurb = "Thaws a whole area at once, not one block.",
+		maxLevel = 1,
+		baseCost = 2400,
+		costGrowth = 1,
+		requires = "torch",
+		requiresLevel = 1,
+	},
+	{
+		key = "scepter",
+		branch = "craft",
+		label = "Ra's Scepter",
+		blurb = "The sun god's own. Melts a huge span.",
+		maxLevel = 1,
+		baseCost = 7500,
+		costGrowth = 1,
+		requires = "campfire",
+		requiresLevel = 1,
+	},
+
+	-- Troy.
+	{
+		key = "greekfire",
+		branch = "craft",
+		label = "Greek Fire",
+		blurb = "Green fire that keeps burning where it lands.",
+		maxLevel = 1,
+		baseCost = 20000,
+		costGrowth = 1,
+		requires = "scepter",
+		requiresLevel = 1,
+	},
+	{
+		key = "chains",
+		branch = "craft",
+		label = "Chains of Kratos",
+		blurb = "Absurd. Rips a crater out of the ice.",
+		maxLevel = 1,
+		baseCost = 60000,
+		costGrowth = 1,
+		requires = "greekfire",
+		requiresLevel = 1,
+	},
 }
 
 Upgrades.DEFS = DEFS

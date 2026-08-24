@@ -183,7 +183,7 @@ end
 
 -- The map is clear. Bigger, held longer, and it counts down to the re-freeze so
 -- the reset reads as part of the design rather than as the world glitching.
-function Toast.finale(found: number, total: number, seconds: number)
+function Toast.finale(mapLabel: string, found: number, total: number, seconds: number)
 	local screen = gui
 	if not screen then
 		return
@@ -238,7 +238,7 @@ function Toast.finale(found: number, total: number, seconds: number)
 	heading.Font = Enum.Font.GothamBold
 	heading.TextSize = 15
 	heading.TextColor3 = Feel.ICE_MID
-	heading.Text = "THE CAVE IS CLEAR"
+	heading.Text = string.upper(mapLabel) .. " IS CLEAR"
 	heading.Parent = panel
 
 	local title = Instance.new("TextLabel")

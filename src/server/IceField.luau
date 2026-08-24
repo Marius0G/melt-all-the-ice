@@ -1,42 +1,41 @@
 --!strict
 --[[
-	IceField - the meltable ice on a single plot (AD-1).
+	IceField - the meltable ice on a single plot (AD-1), for whichever map that
+	plot is currently hosting (AD-4, AD-5).
 
-	The authoritative unit is a chunk Part on a 4-stud grid, each carrying HP.
-	Those Parts are now also what the player sees: flat cyan SmoothPlastic,
-	part-transparent, with a little Reflectance. Terrain no longer skins the ice
-	at all - it only carves the rock chamber around it.
+	The authoritative unit is a chunk Part on the map's grid, each carrying HP.
+	Those Parts are also what the player sees: flat SmoothPlastic in the map's
+	ice colour, near-opaque, with a little Reflectance. Terrain no longer skins
+	the ice at all - it only carves the shell and chamber around it.
 
-	That swap is worth the note. Terrain Ice is smooth and organic, but its PBR
-	texture is the single thing that fights a cartoony look hardest, and it can
-	only ever vanish a voxel at a time, so a melt reads as a hole appearing.
-	Discrete Parts crack, frost, shrink and shatter, and a shape frozen inside
-	the ice can be seen through them. It also takes terrain writes off the melt
-	path entirely: breaking a chunk is now just destroying a Part.
+	Terrain Ice is smooth and organic, but its PBR texture is the single thing
+	that fights a cartoony look hardest, and it can only vanish a voxel at a
+	time, so a melt read as a hole appearing. Discrete Parts crack, frost, shrink
+	and shatter, and it takes terrain writes off the melt path entirely: breaking
+	a chunk is now just destroying a Part.
 
 	Two costs come with it, both handled here:
 
 	  * Overdraw. A thousand part-transparent parts stacked is a lot of fill, so
 	    only chunks with an exposed face are drawn; the rest sit at Transparency
-	    1 until a neighbour dies and uncovers them. Roughly 750 drawn instead of
-	    1536, and it costs nothing visually because the hidden ones are fully
-	    occluded anyway.
-	  * Collision. The ice is solid now, so melting in is the only way through.
-	    That is the game, but note a melted row is 4 studs and a character is
-	    about 5, so it takes two rows to walk into your own tunnel.
+	    1 until a neighbour dies and uncovers them. Roughly half, and it costs
+	    nothing visually because the hidden ones are fully occluded anyway.
+	  * Collision. The ice is solid, so melting in is the only way through. That
+	    is the game, but note one melted row is chunkSize studs and a character
+	    is about 5, so a 4-stud map needs two rows to walk into a tunnel.
 
 	build() is idempotent (AD-3). Running it on a live, half-melted plot restores
-	it to fully frozen, so first generation and the re-freeze on player leave are
-	the same code path rather than a retrofitted reset.
+	it to fully frozen, so first generation, the re-freeze on player leave and
+	the swap to a different map are all the same code path.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Config = require(Shared:WaitForChild("Config"))
 local Feel = require(Shared:WaitForChild("Feel"))
 local GridMath = require(Shared:WaitForChild("GridMath"))
+local MapDefs = require(Shared:WaitForChild("MapDefs"))
 
 export type Chunk = {
 	part: BasePart,
@@ -58,6 +57,7 @@ export type DamageResult = {
 
 export type IceField = {
 	index: number,
+	def: MapDefs.MapDef,
 	origin: Vector3,
 	folder: Folder,
 	chunks: { [BasePart]: Chunk },
@@ -67,8 +67,6 @@ export type IceField = {
 }
 
 local IceField = {}
-
-local CHUNK_VECTOR = Vector3.new(Config.CHUNK_SIZE, Config.CHUNK_SIZE, Config.CHUNK_SIZE)
 
 local FACES = {
 	Vector3.new(1, 0, 0),
@@ -83,13 +81,13 @@ local function fill(center: Vector3, size: Vector3, material: Enum.Material)
 	Workspace.Terrain:FillBlock(CFrame.new(center), size, material)
 end
 
-local function inBounds(gx: number, gy: number, gz: number): boolean
+local function inBounds(def: MapDefs.MapDef, gx: number, gy: number, gz: number): boolean
 	return gx >= 0
-		and gx < Config.GRID_X
+		and gx < def.grid.X
 		and gy >= 0
-		and gy < Config.GRID_Y
+		and gy < def.grid.Y
 		and gz >= 0
-		and gz < Config.GRID_Z
+		and gz < def.grid.Z
 end
 
 -- A chunk is worth drawing only if one of its six faces touches something that
@@ -97,10 +95,10 @@ end
 local function isExposed(field: IceField, gx: number, gy: number, gz: number): boolean
 	for _, face in FACES do
 		local nx, ny, nz = gx + face.X, gy + face.Y, gz + face.Z
-		if not inBounds(nx, ny, nz) then
+		if not inBounds(field.def, nx, ny, nz) then
 			return true
 		end
-		if field.grid[GridMath.cellIndex(nx, ny, nz)] == nil then
+		if field.grid[GridMath.cellIndex(field.def, nx, ny, nz)] == nil then
 			return true
 		end
 	end
@@ -116,62 +114,75 @@ local function stageFor(ratio: number): number
 	return #Feel.ICE_STAGES
 end
 
--- Smooth, deterministic per-cell variation in the -1..1 range.
+-- Smooth, deterministic per-cell variation, so a flat wall of identical cubes
+-- reads as crystal facets rather than one poured surface.
 local function facet(gx: number, gy: number, gz: number): number
 	return 1 + math.noise(gx * 0.7, gy * 0.7, gz * 0.7) * Feel.ICE_FACET_JITTER
 end
 
-local function paint(chunk: Chunk)
+local function paint(field: IceField, chunk: Chunk)
 	local stage = Feel.ICE_STAGES[chunk.stage]
+	-- Hue comes from the map, the frosting progression from the shared stages,
+	-- so each map has its own ice while damage reads identically everywhere.
+	local base = field.def.iceColor:Lerp(Color3.new(1, 1, 1), stage.frost)
 	local tint = facet(chunk.gx, chunk.gy, chunk.gz)
 	chunk.part.Color = Color3.new(
-		math.clamp(stage.color.R * tint, 0, 1),
-		math.clamp(stage.color.G * tint, 0, 1),
-		math.clamp(stage.color.B * tint, 0, 1)
+		math.clamp(base.R * tint, 0, 1),
+		math.clamp(base.G * tint, 0, 1),
+		math.clamp(base.B * tint, 0, 1)
 	)
-	chunk.part.Size = CHUNK_VECTOR * stage.scale
+	local size = field.def.chunkSize * stage.scale
+	chunk.part.Size = Vector3.new(size, size, size)
 	chunk.part.Transparency = if chunk.visible then stage.transparency else 1
 end
 
-local function setVisible(chunk: Chunk, visible: boolean)
+local function setVisible(field: IceField, chunk: Chunk, visible: boolean)
 	if chunk.visible == visible then
 		return
 	end
 	chunk.visible = visible
-	paint(chunk)
+	paint(field, chunk)
 end
 
--- Build, or rebuild, the plot from scratch. Safe to call at any time.
-function IceField.build(field: IceField)
-	-- Rock shell -> hollow the chamber. Running both unconditionally is what
-	-- makes regeneration idempotent: whatever the player carved out gets
-	-- overwritten rather than patched. No ice is filled - the Parts are the ice.
-	local rockCenter, rockSize = GridMath.rockBox(field.origin)
-	fill(rockCenter, rockSize, Enum.Material.Rock)
+-- Build, or rebuild, the plot from scratch. Safe to call at any time, including
+-- to swap the plot onto a different map.
+function IceField.build(field: IceField, def: MapDefs.MapDef?)
+	if def then
+		field.def = def
+	end
+	local map = field.def
+	local origin = field.origin
 
-	local chamberCenter, chamberSize = GridMath.chamberBox(field.origin)
+	-- Shell -> hollow the chamber. Running both unconditionally is what makes
+	-- regeneration idempotent: whatever the player carved out gets overwritten
+	-- rather than patched. No ice is filled - the Parts are the ice.
+	local shellCenter, shellSize = GridMath.shellBox(map, origin)
+	fill(shellCenter, shellSize, map.shellMaterial)
+
+	local chamberCenter, chamberSize = GridMath.chamberBox(map, origin)
 	fill(chamberCenter, chamberSize, Enum.Material.Air)
 
-	-- Drop any chunks that survived the previous run, then lay a fresh grid.
+	-- Drop anything that survived the previous run, then lay a fresh grid.
 	field.folder:ClearAllChildren()
 	table.clear(field.chunks)
 	table.clear(field.grid)
 
+	local chunkVector = Vector3.new(map.chunkSize, map.chunkSize, map.chunkSize)
 	local built = 0
-	for gx = 0, Config.GRID_X - 1 do
-		for gz = 0, Config.GRID_Z - 1 do
-			-- Columns stop at their own height, which is what gives the block an
-			-- uneven top rather than a flat lid.
-			for gy = 0, GridMath.columnHeight(gx, gz) - 1 do
-				local center = GridMath.chunkCenter(field.origin, gx, gy, gz)
+
+	for gx = 0, map.grid.X - 1 do
+		for gz = 0, map.grid.Z - 1 do
+			-- Columns stop at their own height, which gives the block an uneven
+			-- top rather than a flat lid.
+			for gy = 0, GridMath.columnHeight(map, gx, gz) - 1 do
+				local center = GridMath.chunkCenter(map, origin, gx, gy, gz)
 
 				local part = Instance.new("Part")
 				part.Name = string.format("C%d_%d_%d", gx, gy, gz)
-				part.Size = CHUNK_VECTOR
+				part.Size = chunkVector
 				part.CFrame = CFrame.new(center)
 				part.Anchored = true
-				-- Solid: melting in is the only way through.
-				part.CanCollide = true
+				part.CanCollide = true -- melting in is the only way through
 				part.CanTouch = false
 				-- CanQuery stays on; being a raycast target is the whole point.
 				part.CastShadow = false
@@ -184,7 +195,7 @@ function IceField.build(field: IceField)
 
 				local chunk: Chunk = {
 					part = part,
-					hp = Config.CHUNK_HP,
+					hp = map.chunkHp,
 					center = center,
 					gx = gx,
 					gy = gy,
@@ -193,7 +204,7 @@ function IceField.build(field: IceField)
 					stage = 1,
 				}
 				field.chunks[part] = chunk
-				field.grid[GridMath.cellIndex(gx, gy, gz)] = chunk
+				field.grid[GridMath.cellIndex(map, gx, gy, gz)] = chunk
 				built += 1
 			end
 		end
@@ -203,20 +214,36 @@ function IceField.build(field: IceField)
 	-- its neighbours, which do not all exist during the first loop.
 	for _, chunk in field.chunks do
 		chunk.visible = isExposed(field, chunk.gx, chunk.gy, chunk.gz)
-		paint(chunk)
+		paint(field, chunk)
 	end
 
 	field.total = built
 	field.destroyed = 0
 end
 
-function IceField.new(index: number): IceField
+-- Tear the map down and seal the region solid. An unoccupied plot should cost
+-- nothing but a folder: with three maps of very different sizes, an idle plot
+-- holding a built map is thousands of Parts nobody can see.
+function IceField.clear(field: IceField)
+	field.folder:ClearAllChildren()
+	table.clear(field.chunks)
+	table.clear(field.grid)
+	field.total = 0
+	field.destroyed = 0
+
+	local shellCenter, shellSize = GridMath.shellBox(field.def, field.origin)
+	fill(shellCenter, shellSize, field.def.shellMaterial)
+end
+
+-- `build` is optional so a plot can exist before it is worth building.
+function IceField.new(index: number, def: MapDefs.MapDef, build: boolean?): IceField
 	local folder = Instance.new("Folder")
 	folder.Name = string.format("Plot%d_Ice", index)
 	folder.Parent = Workspace
 
 	local field: IceField = {
 		index = index,
+		def = def,
 		origin = GridMath.plotOrigin(index),
 		folder = folder,
 		chunks = {},
@@ -225,7 +252,9 @@ function IceField.new(index: number): IceField
 		destroyed = 0,
 	}
 
-	IceField.build(field)
+	if build ~= false then
+		IceField.build(field)
+	end
 	return field
 end
 
@@ -238,23 +267,24 @@ function IceField.damage(field: IceField, part: BasePart, amount: number): Damag
 		return nil
 	end
 
+	local map = field.def
 	chunk.hp -= amount
 	if chunk.hp > 0 then
-		local ratio = chunk.hp / Config.CHUNK_HP
+		local ratio = chunk.hp / map.chunkHp
 		local stage = stageFor(ratio)
 		if stage ~= chunk.stage then
 			chunk.stage = stage
-			paint(chunk)
+			paint(field, chunk)
 		end
 		return {
 			destroyed = false,
 			center = chunk.center,
 			hpRatio = ratio,
-			cell = GridMath.cellIndex(chunk.gx, chunk.gy, chunk.gz),
+			cell = GridMath.cellIndex(map, chunk.gx, chunk.gy, chunk.gz),
 		}
 	end
 
-	local cell = GridMath.cellIndex(chunk.gx, chunk.gy, chunk.gz)
+	local cell = GridMath.cellIndex(map, chunk.gx, chunk.gy, chunk.gz)
 	field.chunks[part] = nil
 	field.grid[cell] = nil
 	part:Destroy()
@@ -264,15 +294,37 @@ function IceField.damage(field: IceField, part: BasePart, amount: number): Damag
 	-- drawing. This is what keeps the interior cull honest as the block opens up.
 	for _, face in FACES do
 		local nx, ny, nz = chunk.gx + face.X, chunk.gy + face.Y, chunk.gz + face.Z
-		if inBounds(nx, ny, nz) then
-			local neighbour = field.grid[GridMath.cellIndex(nx, ny, nz)]
+		if inBounds(map, nx, ny, nz) then
+			local neighbour = field.grid[GridMath.cellIndex(map, nx, ny, nz)]
 			if neighbour then
-				setVisible(neighbour, true)
+				setVisible(field, neighbour, true)
 			end
 		end
 	end
 
 	return { destroyed = true, center = chunk.center, hpRatio = 0, cell = cell }
+end
+
+-- Which cell a Part belongs to, without touching it. The melt path needs this
+-- because an area strike has to be resolved as a whole: damaging the struck
+-- chunk first and the area second would break the centre outside the payout
+-- path, so it would vanish without being paid for.
+function IceField.cellOf(field: IceField, part: BasePart): number?
+	local chunk = field.chunks[part]
+	if not chunk then
+		return nil
+	end
+	return GridMath.cellIndex(field.def, chunk.gx, chunk.gy, chunk.gz)
+end
+
+-- Same as damage(), addressed by grid cell instead of by Part. Area tools work
+-- outward from a cell, and only the struck chunk is known as a Part.
+function IceField.damageCell(field: IceField, cell: number, amount: number): DamageResult?
+	local chunk = field.grid[cell]
+	if not chunk then
+		return nil
+	end
+	return IceField.damage(field, chunk.part, amount)
 end
 
 -- Is this cell solid ice right now? Used when scattering finds, which may only

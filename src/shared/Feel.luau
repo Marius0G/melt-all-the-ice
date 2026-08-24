@@ -60,10 +60,14 @@ Feel.ICE_FACET_JITTER = 0.07
 -- 1.0 -> 0.667 -> 0.333, so the boundaries sit between them. Picking 0.66 here
 -- looks reasonable and is wrong: 0.667 clears it, the first hit changes nothing
 -- visible, and three hits collapse back into two states.
+--
+-- `frost` is how far the map's own ice colour is pushed toward white, rather
+-- than a literal colour: each map has its own ice (MapDefs) but damage has to
+-- read identically everywhere, so the progression is stored as a blend amount.
 Feel.ICE_STAGES = {
-	{ above = 0.80, color = Color3.fromRGB(126, 196, 246), transparency = 0.12, scale = 1.00 },
-	{ above = 0.45, color = Color3.fromRGB(176, 224, 252), transparency = 0.08, scale = 0.96 },
-	{ above = -1, color = Color3.fromRGB(226, 245, 255), transparency = 0.04, scale = 0.90 },
+	{ above = 0.80, frost = 0.00, transparency = 0.12, scale = 1.00 },
+	{ above = 0.45, frost = 0.35, transparency = 0.08, scale = 0.96 },
+	{ above = -1, frost = 0.72, transparency = 0.04, scale = 0.90 },
 }
 
 -- Swing arc. The Trail default lifetime is 2.0, which smears into a ribbon that

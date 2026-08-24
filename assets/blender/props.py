@@ -1,9 +1,9 @@
 """
-Cave props for Melt All The Ice, authored headlessly in Blender.
+Props for Melt All The Ice, authored headlessly in Blender.
 
 Run:
-    blender -b -P assets/blender/cave_props.py -- --out build/cave_props.fbx
-    blender -b -P assets/blender/cave_props.py -- --render build/preview
+    blender -b -P assets/blender/props.py -- --out build/props.fbx
+    blender -b -P assets/blender/props.py -- --render build/preview
 
 Everything is assembled from primitives on purpose. The target look is flat
 low-poly - the same language as the pyramid reference in docs/reference - so
@@ -263,6 +263,142 @@ def build_pot():
     return join("Pot", parts)
 
 
+
+# --------------------------------------------------------------------------
+# pyramid
+# --------------------------------------------------------------------------
+
+def build_sarcophagus():
+    """Coffin with a stylised mask, about 6 studs long."""
+    parts = []
+    parts.append(box("case", scale=(2.6, 1.0, 0.55), location=(0, 0, 0.55)))
+    parts.append(box("lid", scale=(2.5, 0.9, 0.3), location=(0, 0, 1.35)))
+    parts.append(sphere("headEnd", radius=0.95, location=(2.1, 0, 1.35),
+                        scale=(0.75, 0.95, 0.75), subdiv=2))
+    parts.append(box("mask", scale=(0.42, 0.6, 0.5), location=(2.75, 0, 1.4)))
+    # Nemes lappets: the shape that says pharaoh at a glance.
+    for side in (-1, 1):
+        parts.append(box("lappet", scale=(0.3, 0.2, 0.62),
+                         location=(2.5, side * 0.72, 1.1)))
+    parts.append(box("beard", scale=(0.16, 0.16, 0.42), location=(3.05, 0, 0.95)))
+    for i in range(4):
+        parts.append(box("band", scale=(0.1, 0.92, 0.32),
+                         location=(1.0 - i * 0.95, 0, 1.5)))
+    return join("Sarcophagus", parts)
+
+
+def build_obelisk():
+    """Tapering pillar with a pyramid cap, about 9 studs tall."""
+    parts = []
+    parts.append(box("base", scale=(0.95, 0.95, 0.35), location=(0, 0, 0.35)))
+    for i in range(4):
+        w = 0.7 - i * 0.1
+        parts.append(box("shaft%d" % i, scale=(w, w, 0.95),
+                         location=(0, 0, 1.6 + i * 1.9)))
+    parts.append(cone("cap", radius=0.44, depth=1.2, location=(0, 0, 9.0), verts=4))
+    return join("Obelisk", parts)
+
+
+def build_canopic_jar():
+    """Lidded jar with a jackal head, about 3 studs tall."""
+    parts = []
+    parts.append(cylinder("body", radius=0.6, depth=1.7, location=(0, 0, 0.85), verts=8))
+    parts.append(cylinder("foot", radius=0.68, depth=0.22, location=(0, 0, 0.11), verts=8))
+    parts.append(cylinder("shoulder", radius=0.5, depth=0.3, location=(0, 0, 1.85), verts=8))
+    parts.append(sphere("head", radius=0.42, location=(0, 0, 2.3),
+                        scale=(1.0, 0.85, 0.95), subdiv=2))
+    parts.append(box("muzzle", scale=(0.42, 0.18, 0.16), location=(0.5, 0, 2.2)))
+    for side in (-1, 1):
+        parts.append(cone("ear", radius=0.16, depth=0.6,
+                          location=(-0.05, side * 0.24, 2.85), verts=4))
+    return join("CanopicJar", parts)
+
+
+# --------------------------------------------------------------------------
+# troy
+# --------------------------------------------------------------------------
+
+def build_trojan_horse():
+    """The horse, about 11 studs long. The hero find of the last map."""
+    parts = []
+    parts.append(box("body", scale=(3.0, 1.25, 1.5), location=(0, 0, 5.2)))
+    parts.append(box("chest", scale=(1.0, 1.2, 1.2), location=(2.6, 0, 5.0)))
+    parts.append(box("rump", scale=(1.0, 1.15, 1.3), location=(-2.8, 0, 5.1)))
+    parts.append(box("neck", scale=(0.5, 0.7, 1.5), location=(3.3, 0, 6.9),
+                     rotation=(0, -28, 0)))
+    parts.append(box("head", scale=(0.95, 0.5, 0.42), location=(4.5, 0, 7.9),
+                     rotation=(0, 18, 0)))
+    for side in (-1, 1):
+        parts.append(cone("ear", radius=0.14, depth=0.5,
+                          location=(4.0, side * 0.32, 8.4), verts=4))
+    # Plank seams, which is what makes it read as built rather than alive.
+    for i in range(6):
+        parts.append(box("plank", scale=(0.08, 1.3, 1.45),
+                         location=(2.2 - i * 0.95, 0, 5.2)))
+    for sx in (-2.0, 2.0):
+        for sy in (-0.95, 0.95):
+            parts.append(box("leg", scale=(0.34, 0.3, 1.9), location=(sx, sy, 1.9)))
+    parts.append(box("platform", scale=(3.4, 1.5, 0.25), location=(0, 0, 0.25)))
+    for sx in (-2.4, 2.4):
+        for sy in (-1.4, 1.4):
+            parts.append(cylinder("wheel", radius=0.62, depth=0.24,
+                                  location=(sx, sy, 0.6), rotation=(90, 0, 0), verts=8))
+    parts.append(box("tail", scale=(0.16, 0.16, 0.9), location=(-3.7, 0, 5.6),
+                     rotation=(0, 35, 0)))
+    return join("TrojanHorse", parts)
+
+
+def build_column():
+    """Doric column, about 8 studs tall."""
+    parts = []
+    parts.append(box("plinth", scale=(0.95, 0.95, 0.22), location=(0, 0, 0.22)))
+    parts.append(cylinder("shaft", radius=0.62, depth=6.6, location=(0, 0, 3.75), verts=12))
+    # Flutes as thin boxes around the shaft: at low poly that reads as fluting
+    # without needing a carved profile.
+    for i in range(8):
+        angle = i * (2 * math.pi / 8)
+        parts.append(box("flute", scale=(0.09, 0.09, 3.2),
+                         location=(math.cos(angle) * 0.6, math.sin(angle) * 0.6, 3.75)))
+    parts.append(cylinder("echinus", radius=0.78, depth=0.34, location=(0, 0, 7.2), verts=12))
+    parts.append(box("abacus", scale=(0.92, 0.92, 0.22), location=(0, 0, 7.6)))
+    return join("Column", parts)
+
+
+def build_statue():
+    """Figure on a plinth, about 6 studs tall."""
+    parts = []
+    parts.append(box("plinth", scale=(0.85, 0.85, 0.42), location=(0, 0, 0.42)))
+    parts.append(box("legs", scale=(0.42, 0.3, 1.1), location=(0, 0, 1.9)))
+    parts.append(box("robe", scale=(0.5, 0.38, 0.95), location=(0, 0, 3.7)))
+    parts.append(sphere("head", radius=0.34, location=(0, 0, 4.95),
+                        scale=(1.0, 0.9, 1.05), subdiv=2))
+    parts.append(box("armUp", scale=(0.15, 0.15, 0.85), location=(0.2, 0.55, 4.4),
+                     rotation=(-38, 0, 0)))
+    parts.append(box("armDown", scale=(0.15, 0.15, 0.7), location=(0, -0.5, 3.6)))
+    parts.append(box("drape", scale=(0.55, 0.12, 1.0), location=(0, 0.3, 3.4),
+                     rotation=(0, 0, 12)))
+    return join("Statue", parts)
+
+
+def build_shield():
+    """Round hoplite shield, about 3 studs across."""
+    parts = []
+    parts.append(cylinder("face", radius=1.35, depth=0.2, location=(0, 0, 1.35),
+                          rotation=(90, 0, 0), verts=12))
+    parts.append(cylinder("rim", radius=1.5, depth=0.14, location=(0, 0, 1.35),
+                          rotation=(90, 0, 0), verts=12))
+    parts.append(sphere("boss", radius=0.34, location=(0, -0.16, 1.35),
+                        scale=(1.0, 0.6, 1.0), subdiv=2))
+    shield = join("Shield", parts)
+    # Leaned back a little so it does not read as a flat disc lying down.
+    shield.rotation_euler = [math.radians(a) for a in (18, 0, 0)]
+    bpy.ops.object.select_all(action="DESELECT")
+    shield.select_set(True)
+    bpy.context.view_layer.objects.active = shield
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+    return shield
+
+
 PROPS = {
     "Mammoth": build_mammoth,
     "BonePile": build_bonepile,
@@ -271,6 +407,13 @@ PROPS = {
     "Chest": build_chest,
     "Stalagmite": build_stalagmite,
     "Pot": build_pot,
+    "Sarcophagus": build_sarcophagus,
+    "Obelisk": build_obelisk,
+    "CanopicJar": build_canopic_jar,
+    "TrojanHorse": build_trojan_horse,
+    "Column": build_column,
+    "Statue": build_statue,
+    "Shield": build_shield,
 }
 
 

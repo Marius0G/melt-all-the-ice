@@ -12,7 +12,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Config = require(Shared:WaitForChild("Config"))
 local Feel = require(Shared:WaitForChild("Feel"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 
@@ -28,21 +27,36 @@ local Toast = require(modules:WaitForChild("Toast"))
 
 local MeltEffects = {}
 
-local function onSwingResult(position: unknown, normal: unknown, destroyed: unknown, hpRatio: unknown)
+local function onSwingResult(
+	position: unknown,
+	normal: unknown,
+	destroyed: unknown,
+	hpRatio: unknown,
+	earned: unknown
+)
 	if typeof(position) ~= "Vector3" or typeof(normal) ~= "Vector3" then
 		return
 	end
 	local at = position :: Vector3
 	local face = normal :: Vector3
-	local killed = destroyed == true
+	-- A strike can break several chunks at once now, so this is a count rather
+	-- than a flag. The count scales the response: a scepter crater should not
+	-- feel like a stone chip.
+	local broke = if typeof(destroyed) == "number" then destroyed else 0
 	local ratio = if typeof(hpRatio) == "number" then hpRatio else 0
+	local payout = if typeof(earned) == "number" then earned else 0
 
-	Crosshair.confirm(killed)
+	Crosshair.confirm(broke > 0)
 
-	if killed then
+	if broke > 0 then
 		SwingAnimation.hitStop()
-		Particles.shatter(at, face)
-		CameraShake.impulse(Feel.SHAKE_KILL)
+		Particles.shatter(at, face, broke)
+		local weight = math.min(3, 1 + (broke - 1) * 0.35)
+		CameraShake.impulse({
+			magnitude = Feel.SHAKE_KILL.magnitude * weight,
+			roughness = Feel.SHAKE_KILL.roughness,
+			duration = Feel.SHAKE_KILL.duration * math.min(2, weight),
+		})
 		Shards.burst(at, face)
 
 		-- Three layers: the sharp transient, the body of the break, then the
@@ -54,7 +68,9 @@ local function onSwingResult(position: unknown, normal: unknown, destroyed: unkn
 			delay = Feel.TAIL_DELAY,
 		})
 
-		Popups.show(at, string.format("+$%d", Config.MONEY_PER_CHUNK))
+		if payout > 0 then
+			Popups.show(at, string.format("+$%d", payout), nil, math.min(1.8, 1 + broke * 0.08))
+		end
 	else
 		Particles.chip(at, face)
 		CameraShake.impulse(Feel.SHAKE_CHIP)
@@ -88,13 +104,14 @@ local function onDiscovery(position: unknown, label: unknown, reward: unknown, h
 	end)
 end
 
-local function onFinale(found: unknown, total: unknown, seconds: unknown)
+local function onFinale(label: unknown, found: unknown, total: unknown, seconds: unknown)
+	local name = if typeof(label) == "string" then label else "The map"
 	local f = if typeof(found) == "number" then found else 0
 	local t = if typeof(total) == "number" then total else 0
 	local s = if typeof(seconds) == "number" then seconds else 12
 
 	CameraShake.impulse(Feel.SHAKE_REVEAL)
-	Toast.finale(f, t, s)
+	Toast.finale(name, f, t, s)
 end
 
 function MeltEffects.start()

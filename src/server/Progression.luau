@@ -17,11 +17,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local MapDefs = require(Shared:WaitForChild("MapDefs"))
 local Tools = require(Shared:WaitForChild("Tools"))
 local Upgrades = require(Shared:WaitForChild("Upgrades"))
 
 export type Record = {
 	levels: { [string]: number },
+	maps: { [string]: boolean }, -- unlocked
+	current: string,
 }
 
 local Progression = {}
@@ -34,7 +37,11 @@ local function push(player: Player, key: string, level: number)
 	player:SetAttribute(ATTRIBUTE_PREFIX .. key, level)
 end
 
-function Progression.add(player: Player, restored: { [string]: number }?)
+function Progression.add(
+	player: Player,
+	restored: { [string]: number }?,
+	restoredMaps: { [string]: boolean }?
+)
 	local levels: { [string]: number } = {}
 	for _, def in Upgrades.DEFS do
 		local level = 0
@@ -44,7 +51,54 @@ function Progression.add(player: Player, restored: { [string]: number }?)
 		levels[def.key] = level
 		push(player, def.key, level)
 	end
-	records[player] = { levels = levels }
+	-- The first map is always unlocked; the rest are earned by clearing the one
+	-- before them.
+	local maps: { [string]: boolean } = { [MapDefs.FIRST.id] = true }
+	if restoredMaps then
+		for id, unlocked in restoredMaps do
+			if unlocked == true and MapDefs.get(id) then
+				maps[id] = true
+			end
+		end
+	end
+
+	records[player] = { levels = levels, maps = maps, current = MapDefs.FIRST.id }
+	player:SetAttribute("CurrentMap", MapDefs.FIRST.id)
+	player:SetAttribute("MapLabel", MapDefs.FIRST.label)
+end
+
+function Progression.unlockedMaps(player: Player): { [string]: boolean }
+	local record = records[player]
+	return if record then record.maps else { [MapDefs.FIRST.id] = true }
+end
+
+function Progression.unlock(player: Player, id: string)
+	local record = records[player]
+	if record and MapDefs.get(id) then
+		record.maps[id] = true
+	end
+end
+
+function Progression.currentMap(player: Player): MapDefs.MapDef
+	local record = records[player]
+	local def = record and MapDefs.get(record.current)
+	return def or MapDefs.FIRST
+end
+
+-- Only allows a map the player has actually unlocked.
+function Progression.setCurrentMap(player: Player, id: string): boolean
+	local record = records[player]
+	if not record or not record.maps[id] then
+		return false
+	end
+	local def = MapDefs.get(id)
+	if not def then
+		return false
+	end
+	record.current = id
+	player:SetAttribute("CurrentMap", id)
+	player:SetAttribute("MapLabel", def.label)
+	return true
 end
 
 function Progression.remove(player: Player)
