@@ -26,6 +26,8 @@ local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Remotes = require(Shared:WaitForChild("Remotes"))
+local Skins = require(Shared:WaitForChild("Skins"))
+local Tools = require(Shared:WaitForChild("Tools"))
 local Upgrades = require(Shared:WaitForChild("Upgrades"))
 
 local SkillTree = {}
@@ -49,6 +51,7 @@ local screen: ScreenGui
 local panel: Frame
 local open = false
 local nodes: { [string]: () -> () } = {}
+local skinRows: { () -> () } = {}
 
 local function corner(parent: GuiObject, radius: number)
 	local instance = Instance.new("UICorner")
@@ -224,6 +227,153 @@ local function refreshAll()
 	for _, refresh in nodes do
 		refresh()
 	end
+	for _, refresh in skinRows do
+		refresh()
+	end
+end
+
+local function ownsSkin(key: string): boolean
+	return player:GetAttribute("SkinOwned_" .. key) == true
+end
+
+local function wornSkin(tool: string): string?
+	local value = player:GetAttribute("Skin_" .. tool)
+	return if typeof(value) == "string" then value else nil
+end
+
+-- One row per tool: the tool's name, then a button per look. Owning a look and
+-- wearing it are separate states, so the button says which.
+local function buildSkinRow(parent: GuiObject, tool: Tools.ToolDef, order: number)
+	local options = Skins.forTool(tool.key)
+	if #options == 0 then
+		return
+	end
+
+	local row = Instance.new("Frame")
+	row.Name = tool.key
+	row.LayoutOrder = order
+	row.Size = UDim2.new(1, 0, 0, 76)
+	row.BackgroundColor3 = PANEL_TOP
+	row.BorderSizePixel = 0
+	row.Parent = parent
+	corner(row, 12)
+	verticalFill(row, PANEL_TOP, PANEL_BOTTOM)
+	goldStroke(row, 3)
+
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop = UDim.new(0, 8)
+	pad.PaddingBottom = UDim.new(0, 8)
+	pad.PaddingLeft = UDim.new(0, 12)
+	pad.PaddingRight = UDim.new(0, 12)
+	pad.Parent = row
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(0, 150, 1, 0)
+	title.BackgroundTransparency = 1
+	title.Font = Enum.Font.FredokaOne
+	title.TextSize = 18
+	title.TextColor3 = Color3.new(1, 1, 1)
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.Text = tool.label
+	title.Parent = row
+
+	local strip = Instance.new("Frame")
+	strip.Size = UDim2.new(1, -158, 1, 0)
+	strip.Position = UDim2.fromOffset(158, 0)
+	strip.BackgroundTransparency = 1
+	strip.Parent = row
+
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.Padding = UDim.new(0, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = strip
+
+	local refreshers: { () -> () } = {}
+
+	for index, skin in options do
+		local button = Instance.new("TextButton")
+		button.LayoutOrder = index
+		button.Size = UDim2.fromOffset(112, 60)
+		button.BackgroundColor3 = skin.body
+		button.BorderSizePixel = 0
+		button.AutoButtonColor = false
+		button.Text = ""
+		button.Parent = strip
+		corner(button, 10)
+		local stroke = goldStroke(button, 3)
+
+		-- The accent colour is the actual difference between most looks, so it
+		-- gets a swatch rather than being described in words.
+		local swatch = Instance.new("Frame")
+		swatch.Size = UDim2.new(1, -16, 0, 8)
+		swatch.Position = UDim2.fromOffset(8, 8)
+		swatch.BackgroundColor3 = skin.flame or skin.accent
+		swatch.BorderSizePixel = 0
+		swatch.Parent = button
+		corner(swatch, 4)
+
+		local name = Instance.new("TextLabel")
+		name.Size = UDim2.new(1, -12, 0, 18)
+		name.Position = UDim2.fromOffset(6, 20)
+		name.BackgroundTransparency = 1
+		name.Font = Enum.Font.GothamBold
+		name.TextSize = 12
+		name.TextColor3 = Color3.new(1, 1, 1)
+		name.TextStrokeTransparency = 0.4
+		name.Text = skin.label
+		name.Parent = button
+
+		local state = Instance.new("TextLabel")
+		state.Size = UDim2.new(1, -12, 0, 16)
+		state.Position = UDim2.new(0, 6, 1, -22)
+		state.BackgroundTransparency = 1
+		state.Font = Enum.Font.GothamBold
+		state.TextSize = 12
+		state.TextStrokeTransparency = 0.4
+		state.Parent = button
+
+		local function refresh()
+			local owned = ownsSkin(skin.key)
+			local worn = wornSkin(tool.key) == skin.key
+			if worn then
+				state.Text = "WORN"
+				state.TextColor3 = GOLD
+				stroke.Transparency = 0
+			elseif owned then
+				state.Text = "WEAR"
+				state.TextColor3 = Color3.new(1, 1, 1)
+				stroke.Transparency = 0.45
+			else
+				local affordable = money() >= skin.cost
+				state.Text = string.format("$%d", skin.cost)
+				state.TextColor3 = if affordable then GOLD else Color3.fromRGB(196, 96, 96)
+				stroke.Transparency = if affordable then 0.3 else 0.7
+			end
+		end
+
+		button.MouseButton1Click:Connect(function()
+			local action = if ownsSkin(skin.key) then "equip" else "buy"
+			button.Size = UDim2.fromOffset(108, 56)
+			TweenService
+				:Create(button, TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+					Size = UDim2.fromOffset(112, 60),
+				})
+				:Play()
+			Remotes.skin():FireServer(action, skin.key)
+		end)
+
+		table.insert(refreshers, refresh)
+	end
+
+	table.insert(skinRows, function()
+		-- Only show a tool the player actually owns.
+		row.Visible = tool.key == "stone" or player:GetAttribute("Upg_" .. tool.key) ~= nil
+			and (player:GetAttribute("Upg_" .. tool.key) :: number) > 0
+		for _, refresh in refreshers do
+			refresh()
+		end
+	end)
 end
 
 local function build()
@@ -277,15 +427,31 @@ local function build()
 	panelPad.PaddingRight = UDim.new(0, 20)
 	panelPad.Parent = panel
 
-	local heading = Instance.new("TextLabel")
-	heading.Size = UDim2.new(1, 0, 0, 34)
-	heading.BackgroundTransparency = 1
-	heading.Font = Enum.Font.FredokaOne
-	heading.TextSize = 28
-	heading.TextColor3 = GOLD
-	heading.TextXAlignment = Enum.TextXAlignment.Left
-	heading.Text = "UPGRADES"
-	heading.Parent = panel
+	-- Two tabs rather than two screens: buying power and choosing how the tool
+	-- looks are both "spend money on your kit", so they belong in one place.
+	local tabs: { [string]: TextButton } = {}
+	local function makeTab(name: string, label: string, offset: number): TextButton
+		local button = Instance.new("TextButton")
+		button.Name = name
+		button.Position = UDim2.fromOffset(offset, 0)
+		button.Size = UDim2.fromOffset(168, 38)
+		button.BackgroundColor3 = PANEL_TOP
+		button.BorderSizePixel = 0
+		button.AutoButtonColor = false
+		button.Font = Enum.Font.FredokaOne
+		button.TextSize = 22
+		button.TextColor3 = GOLD
+		button.Text = label
+		button.Parent = panel
+		corner(button, 10)
+		verticalFill(button, PANEL_TOP, PANEL_BOTTOM)
+		goldStroke(button, 3)
+		tabs[name] = button
+		return button
+	end
+
+	makeTab("upgrades", "UPGRADES", 0)
+	makeTab("skins", "WEAPONS", 178)
 
 	local close = Instance.new("TextButton")
 	close.AnchorPoint = Vector2.new(1, 0)
@@ -367,6 +533,50 @@ local function build()
 		end
 	end
 
+	-- Skins view, occupying the same space as the columns.
+	local skinsView = Instance.new("ScrollingFrame")
+	skinsView.Name = "Skins"
+	skinsView.Size = UDim2.new(1, 0, 1, -52)
+	skinsView.Position = UDim2.fromOffset(0, 52)
+	skinsView.BackgroundTransparency = 1
+	skinsView.BorderSizePixel = 0
+	skinsView.ScrollBarThickness = 4
+	skinsView.ScrollBarImageColor3 = GOLD_DARK
+	skinsView.CanvasSize = UDim2.new()
+	skinsView.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	skinsView.ScrollingDirection = Enum.ScrollingDirection.Y
+	skinsView.Visible = false
+	skinsView.Parent = panel
+
+	local skinLayout = Instance.new("UIListLayout")
+	skinLayout.FillDirection = Enum.FillDirection.Vertical
+	skinLayout.Padding = UDim.new(0, 10)
+	skinLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	skinLayout.Parent = skinsView
+
+	for order, tool in Tools.DEFS do
+		buildSkinRow(skinsView, tool, order)
+	end
+
+	local function setTab(name: string)
+		columns.Visible = name == "upgrades"
+		skinsView.Visible = name == "skins"
+		for key, button in tabs do
+			-- The active tab is the bright one; the other reads as available.
+			button.TextColor3 = if key == name then GOLD else Color3.fromRGB(150, 164, 188)
+			button.BackgroundTransparency = if key == name then 0 else 0.4
+		end
+		refreshAll()
+	end
+
+	for name, button in tabs do
+		local which = name
+		button.MouseButton1Click:Connect(function()
+			setTab(which)
+		end)
+	end
+	setTab("upgrades")
+
 	local function setOpen(value: boolean)
 		open = value
 		panel.Visible = value
@@ -404,7 +614,19 @@ function SkillTree.start()
 		player:GetAttributeChangedSignal("Upg_" .. def.key):Connect(refreshAll)
 	end
 
+	for _, tool in Tools.DEFS do
+		player:GetAttributeChangedSignal("Skin_" .. tool.key):Connect(refreshAll)
+	end
+	for _, skin in Skins.DEFS do
+		player:GetAttributeChangedSignal("SkinOwned_" .. skin.key):Connect(refreshAll)
+	end
+
 	Remotes.purchaseResult().OnClientEvent:Connect(function(_key, ok, _reason)
+		if ok then
+			refreshAll()
+		end
+	end)
+	Remotes.skinResult().OnClientEvent:Connect(function(_key, ok, _reason)
 		if ok then
 			refreshAll()
 		end

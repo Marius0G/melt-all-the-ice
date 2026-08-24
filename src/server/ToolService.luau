@@ -17,6 +17,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Feel = require(Shared:WaitForChild("Feel"))
+local Skins = require(Shared:WaitForChild("Skins"))
 local Tools = require(Shared:WaitForChild("Tools"))
 
 local ToolService = {}
@@ -249,6 +250,39 @@ local function buildChains(tool: Tool)
 	assemble(tool, handle, extras)
 end
 
+-- Skins are applied by part name after the tool is built, so adding one never
+-- means touching a builder. Cosmetic only - nothing here can reach a number
+-- that affects a swing.
+local function applySkin(tool: Tool, skin: Skins.Skin)
+	for _, part in tool:GetDescendants() do
+		if not part:IsA("BasePart") then
+			continue
+		end
+		if part.Name == "Handle" then
+			part.Color = skin.body
+			part.Material = skin.material
+		elseif part.Name == "Flame" then
+			local flame = skin.flame
+			if flame then
+				part.Color = flame
+				for _, child in part:GetDescendants() do
+					if child:IsA("PointLight") then
+						child.Color = flame
+					elseif child:IsA("ParticleEmitter") then
+						child.Color = ColorSequence.new({
+							ColorSequenceKeypoint.new(0, flame:Lerp(Color3.new(1, 1, 1), 0.6)),
+							ColorSequenceKeypoint.new(0.5, flame),
+							ColorSequenceKeypoint.new(1, flame:Lerp(Color3.new(0, 0, 0), 0.6)),
+						})
+					end
+				end
+			end
+		else
+			part.Color = skin.accent
+		end
+	end
+end
+
 local BUILDERS: { [string]: (Tool) -> () } = {
 	stone = buildStone,
 	axe = buildAxe,
@@ -259,7 +293,7 @@ local BUILDERS: { [string]: (Tool) -> () } = {
 	chains = buildChains,
 }
 
-function ToolService.create(key: string): Tool?
+function ToolService.create(key: string, skinKey: string?): Tool?
 	local def = Tools.get(key)
 	local builder = BUILDERS[key]
 	if not def or not builder then
@@ -277,30 +311,61 @@ function ToolService.create(key: string): Tool?
 	tool:SetAttribute("ToolKey", key)
 
 	builder(tool)
+
+	local chosen = skinKey or Skins.defaultFor(key)
+	local skin = if chosen then Skins.get(chosen) else nil
+	if skin and skin.tool == key then
+		applySkin(tool, skin)
+		-- Recorded so sync can tell when the look has changed and needs
+		-- rebuilding, rather than rebuilding every tool on every call.
+		tool:SetAttribute("SkinKey", skin.key)
+	end
 	return tool
 end
 
 -- Give the player exactly the tools they own, and nothing they do not. Called on
 -- spawn and again whenever a purchase changes the set.
-function ToolService.sync(player: Player, owned: { [string]: boolean })
+function ToolService.sync(
+	player: Player,
+	owned: { [string]: boolean },
+	equipped: { [string]: string }?
+)
 	local backpack = player:FindFirstChildOfClass("Backpack")
 	if not backpack then
 		return
 	end
 	local character = player.Character
 
-	local function has(key: string): boolean
-		if backpack:FindFirstChild((Tools.get(key) :: Tools.ToolDef).label) then
-			return true
+	local function existing(key: string): Tool?
+		local label = (Tools.get(key) :: Tools.ToolDef).label
+		local found = backpack:FindFirstChild(label)
+		if not found and character then
+			found = character:FindFirstChild(label)
 		end
-		return character ~= nil
-			and character:FindFirstChild((Tools.get(key) :: Tools.ToolDef).label) ~= nil
+		return if found and found:IsA("Tool") then found else nil
 	end
 
 	for _, def in Tools.DEFS do
 		local shouldHave = def.key == "stone" or owned[def.key] == true
-		if shouldHave and not has(def.key) then
-			local tool = ToolService.create(def.key)
+		if not shouldHave then
+			continue
+		end
+
+		local wanted = (equipped and equipped[def.key]) or Skins.defaultFor(def.key)
+		local current = existing(def.key)
+
+		if current then
+			-- Already held: only rebuild it if the chosen look has changed.
+			if wanted and current:GetAttribute("SkinKey") ~= wanted then
+				local wasEquipped = current.Parent == character
+				current:Destroy()
+				local replacement = ToolService.create(def.key, wanted)
+				if replacement then
+					replacement.Parent = if wasEquipped and character then character else backpack
+				end
+			end
+		else
+			local tool = ToolService.create(def.key, wanted)
 			if tool then
 				tool.Parent = backpack
 			end

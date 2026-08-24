@@ -84,6 +84,17 @@ function Remotes.finale(): RemoteEvent
 	return event("Finale")
 end
 
+-- Client -> server: (action, key) where action is "buy" or "equip". Cost and
+-- ownership are decided server-side; the payload carries no authority.
+function Remotes.skin(): RemoteEvent
+	return event("Skin")
+end
+
+-- Server -> client: (key, ok, reason).
+function Remotes.skinResult(): RemoteEvent
+	return event("SkinResult")
+end
+
 -- Create every remote up front, before any client can ask for one.
 --
 -- The lazy path above is fine on the server, which creates on demand, but the
@@ -97,6 +108,8 @@ function Remotes.initServer()
 	Remotes.purchase()
 	Remotes.purchaseResult()
 	Remotes.finale()
+	Remotes.skin()
+	Remotes.skinResult()
 end
 
 return Remotes

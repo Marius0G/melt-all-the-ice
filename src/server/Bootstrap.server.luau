@@ -110,7 +110,7 @@ local function onPlayerAdded(player: Player)
 	-- Load before allocating: which map the plot should be built as depends on
 	-- what this player has unlocked, so the save has to be read first.
 	local save = SaveService.load(player)
-	Progression.add(player, save.upgrades, save.unlockedMaps)
+	Progression.add(player, save.upgrades, save.unlockedMaps, save.skins, save.equippedSkins)
 	PlayerStats.add(player, save.money)
 
 	local plot = PlotManager.allocate(player, Progression.currentMap(player))
@@ -142,6 +142,8 @@ local function collect(player: Player): SaveService.Save
 		-- Which maps are unlocked persists; how far through one you were does
 		-- not. Plots re-freeze on release (AD-3), so a map always begins frozen.
 		unlockedMaps = Progression.unlockedMaps(player),
+		skins = Progression.ownedSkins(player),
+		equippedSkins = Progression.equippedSkins(player),
 	}
 end
 

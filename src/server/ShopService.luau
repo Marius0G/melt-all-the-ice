@@ -32,7 +32,7 @@ function ShopService.apply(player: Player)
 		Progression.staminaRegen(player)
 	)
 	PlayerStats.setFuelLimits(player, Progression.fuelMax(player), Progression.fuelRegen(player))
-	ToolService.sync(player, Progression.ownedTools(player))
+	ToolService.sync(player, Progression.ownedTools(player), Progression.equippedSkins(player))
 end
 
 local function onPurchase(player: Player, key: unknown)
@@ -56,8 +56,38 @@ local function onPurchase(player: Player, key: unknown)
 	Remotes.purchaseResult():FireClient(player, key, ok, reason)
 end
 
+local function onSkin(player: Player, action: unknown, key: unknown)
+	if typeof(action) ~= "string" or typeof(key) ~= "string" then
+		return
+	end
+
+	local stats = PlayerStats.get(player)
+	if not stats then
+		return
+	end
+
+	local ok, reason
+	if action == "buy" then
+		ok, reason = Progression.buySkin(player, key :: string, stats.money, function(cost)
+			return PlayerStats.spendMoney(player, cost)
+		end)
+	elseif action == "equip" then
+		ok, reason = Progression.selectSkin(player, key :: string)
+	else
+		ok, reason = false, "unknown action"
+	end
+
+	if ok then
+		-- Rebuilds only the tool whose look actually changed.
+		ShopService.apply(player)
+	end
+
+	Remotes.skinResult():FireClient(player, key, ok, reason)
+end
+
 function ShopService.init()
 	Remotes.purchase().OnServerEvent:Connect(onPurchase)
+	Remotes.skin().OnServerEvent:Connect(onSkin)
 end
 
 return ShopService

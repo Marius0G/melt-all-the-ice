@@ -37,6 +37,8 @@ export type Save = {
 	money: number,
 	upgrades: { [string]: number },
 	unlockedMaps: { [string]: boolean },
+	skins: { [string]: boolean },
+	equippedSkins: { [string]: string },
 }
 
 local store: DataStore? = nil
@@ -49,7 +51,14 @@ local function keyFor(player: Player): string
 end
 
 local function emptySave(): Save
-	return { version = SCHEMA_VERSION, money = 0, upgrades = {}, unlockedMaps = { cave = true } }
+	return {
+		version = SCHEMA_VERSION,
+		money = 0,
+		upgrades = {},
+		unlockedMaps = { cave = true },
+		skins = {},
+		equippedSkins = {},
+	}
 end
 
 -- One attempt to reach the store. Everything downstream treats nil as "saving
@@ -128,6 +137,20 @@ function SaveService.load(player: Player): Save
 			end
 		end
 	end
+	if typeof(data.skins) == "table" then
+		for key, owned in data.skins do
+			if typeof(key) == "string" then
+				save.skins[key] = owned == true
+			end
+		end
+	end
+	if typeof(data.equippedSkins) == "table" then
+		for tool, key in data.equippedSkins do
+			if typeof(tool) == "string" and typeof(key) == "string" then
+				save.equippedSkins[tool] = key
+			end
+		end
+	end
 	return save
 end
 
@@ -150,6 +173,22 @@ local function fingerprint(save: Save): string
 	end
 	table.sort(maps)
 	table.insert(parts, "maps:" .. table.concat(maps, ","))
+
+	local owned = {}
+	for key, has in save.skins do
+		if has then
+			table.insert(owned, key)
+		end
+	end
+	table.sort(owned)
+	table.insert(parts, "skins:" .. table.concat(owned, ","))
+
+	local worn = {}
+	for tool, key in save.equippedSkins do
+		table.insert(worn, tool .. "=" .. key)
+	end
+	table.sort(worn)
+	table.insert(parts, "worn:" .. table.concat(worn, ","))
 	return table.concat(parts, "|")
 end
 

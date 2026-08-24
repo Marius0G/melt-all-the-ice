@@ -18,6 +18,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local MapDefs = require(Shared:WaitForChild("MapDefs"))
+local Skins = require(Shared:WaitForChild("Skins"))
 local Tools = require(Shared:WaitForChild("Tools"))
 local Upgrades = require(Shared:WaitForChild("Upgrades"))
 
@@ -25,6 +26,8 @@ export type Record = {
 	levels: { [string]: number },
 	maps: { [string]: boolean }, -- unlocked
 	current: string,
+	skins: { [string]: boolean }, -- owned
+	equipped: { [string]: string }, -- tool key -> skin key
 }
 
 local Progression = {}
@@ -40,7 +43,9 @@ end
 function Progression.add(
 	player: Player,
 	restored: { [string]: number }?,
-	restoredMaps: { [string]: boolean }?
+	restoredMaps: { [string]: boolean }?,
+	restoredSkins: { [string]: boolean }?,
+	restoredEquipped: { [string]: string }?
 )
 	local levels: { [string]: number } = {}
 	for _, def in Upgrades.DEFS do
@@ -62,9 +67,112 @@ function Progression.add(
 		end
 	end
 
-	records[player] = { levels = levels, maps = maps, current = MapDefs.FIRST.id }
+	-- Free skins are always owned, so the shop can never leave a tool with
+	-- nothing to equip.
+	local skins: { [string]: boolean } = {}
+	for _, skin in Skins.DEFS do
+		if skin.cost == 0 then
+			skins[skin.key] = true
+		end
+	end
+	if restoredSkins then
+		for key, owned in restoredSkins do
+			if owned == true and Skins.get(key) then
+				skins[key] = true
+			end
+		end
+	end
+
+	local equipped: { [string]: string } = {}
+	for _, tool in Tools.DEFS do
+		local chosen = restoredEquipped and restoredEquipped[tool.key]
+		local def = if typeof(chosen) == "string" then Skins.get(chosen) else nil
+		-- Fall back to the free skin if the saved one is unknown or unowned.
+		if def and def.tool == tool.key and skins[chosen :: string] then
+			equipped[tool.key] = chosen :: string
+		else
+			equipped[tool.key] = Skins.defaultFor(tool.key) or ""
+		end
+	end
+
+	records[player] = {
+		levels = levels,
+		maps = maps,
+		current = MapDefs.FIRST.id,
+		skins = skins,
+		equipped = equipped,
+	}
+
+	for key, owned in skins do
+		player:SetAttribute("SkinOwned_" .. key, owned)
+	end
+	for tool, key in equipped do
+		player:SetAttribute("Skin_" .. tool, key)
+	end
 	player:SetAttribute("CurrentMap", MapDefs.FIRST.id)
 	player:SetAttribute("MapLabel", MapDefs.FIRST.label)
+end
+
+function Progression.ownedSkins(player: Player): { [string]: boolean }
+	local record = records[player]
+	return if record then record.skins else {}
+end
+
+function Progression.equippedSkins(player: Player): { [string]: string }
+	local record = records[player]
+	return if record then record.equipped else {}
+end
+
+function Progression.equippedSkin(player: Player, tool: string): string?
+	local record = records[player]
+	if not record then
+		return Skins.defaultFor(tool)
+	end
+	return record.equipped[tool] or Skins.defaultFor(tool)
+end
+
+-- Buying and equipping are separate: owning a look and wearing it are different
+-- states, and the shop needs to show both.
+function Progression.buySkin(
+	player: Player,
+	key: string,
+	balance: number,
+	spend: (number) -> boolean
+): (boolean, string)
+	local record = records[player]
+	if not record then
+		return false, "no record"
+	end
+	local skin = Skins.get(key)
+	if not skin then
+		return false, "unknown skin"
+	end
+	if record.skins[key] then
+		return false, "already owned"
+	end
+	if balance < skin.cost or not spend(skin.cost) then
+		return false, "too expensive"
+	end
+	record.skins[key] = true
+	player:SetAttribute("SkinOwned_" .. key, true)
+	return true, "ok"
+end
+
+function Progression.selectSkin(player: Player, key: string): (boolean, string)
+	local record = records[player]
+	if not record then
+		return false, "no record"
+	end
+	local skin = Skins.get(key)
+	if not skin then
+		return false, "unknown skin"
+	end
+	if not record.skins[key] then
+		return false, "not owned"
+	end
+	record.equipped[skin.tool] = key
+	player:SetAttribute("Skin_" .. skin.tool, key)
+	return true, "ok"
 end
 
 function Progression.unlockedMaps(player: Player): { [string]: boolean }
