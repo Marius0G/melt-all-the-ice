@@ -43,6 +43,16 @@ local Config = {
 	STONE_DAMAGE = 10,
 	MONEY_PER_CHUNK = 1,
 
+	-- Fuel gate, for fire tools.
+	--
+	-- Tuned against sustained throughput, not burst. At regen 4 the torch was
+	-- 0.44 chunks/second against the stone's 0.62 - it felt stronger per swing
+	-- and was strictly worse to actually play, which inverts the progression the
+	-- design doc describes. At 9 it sustains about 1.0, comfortably ahead, and
+	-- the full bar still empties in eight fast swings so the gate is real.
+	FUEL_MAX = 72,
+	FUEL_REGEN = 9, -- per second
+
 	-- Stamina gate.
 	STAMINA_MAX = 100,
 	STAMINA_PER_SWING = 8,

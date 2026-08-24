@@ -20,8 +20,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Config = require(Shared:WaitForChild("Config"))
 local Feel = require(Shared:WaitForChild("Feel"))
+local Tools = require(Shared:WaitForChild("Tools"))
 
 local SwingAnimation = {}
 
@@ -118,9 +118,17 @@ function SwingAnimation.play(tool: Tool?)
 		-- Scale the clip to land inside the swing cooldown. fadeTime 0.05 rather
 		-- than the 0.1 default: at a 450ms cadence the default blend eats a fifth
 		-- of the animation and smears the impact frame.
+		local cooldown = 0.45
+		if tool then
+			local key = tool:GetAttribute("ToolKey")
+			local def = if typeof(key) == "string" then Tools.get(key) else nil
+			if def then
+				cooldown = def.cooldown
+			end
+		end
 		local speed = 1
 		if current.Length > 0 then
-			speed = current.Length / (Config.SWING_COOLDOWN * 0.85)
+			speed = current.Length / (cooldown * 0.85)
 		end
 		current:Play(0.05, 1, speed)
 		return

@@ -19,7 +19,8 @@ local IceField = require(modules:WaitForChild("IceField"))
 local MeltService = require(modules:WaitForChild("MeltService"))
 local PlayerStats = require(modules:WaitForChild("PlayerStats"))
 local PlotManager = require(modules:WaitForChild("PlotManager"))
-local StoneTool = require(modules:WaitForChild("StoneTool"))
+local Progression = require(modules:WaitForChild("Progression"))
+local ShopService = require(modules:WaitForChild("ShopService"))
 
 -- Characters load only once a plot is reserved, so nobody spawns adrift at the
 -- world origin while allocation is still in flight.
@@ -60,6 +61,7 @@ PlotManager.init()
 print(string.format("[MeltAllTheIce] built plots in %.2fs", os.clock() - buildStart))
 
 MeltService.init()
+ShopService.init()
 
 local function onCharacterAdded(player: Player, character: Model)
 	local plot = PlotManager.get(player)
@@ -73,9 +75,17 @@ local function onCharacterAdded(player: Player, character: Model)
 	local position = GridMath.spawnPosition(plot.field.origin) + Vector3.new(0, 4, 0)
 	character:PivotTo(CFrame.lookAt(position, position + Vector3.new(1, 0, 0)))
 
+	-- Hand back everything they own, and put the best of it in their hands.
+	ShopService.apply(player)
 	local backpack = player:FindFirstChildOfClass("Backpack")
-	if backpack then
-		StoneTool.create().Parent = backpack
+	local humanoid0 = character:FindFirstChildOfClass("Humanoid")
+	if backpack and humanoid0 then
+		local best = Progression.bestTool(player)
+		local def = require(Shared:WaitForChild("Tools")).get(best)
+		local tool = def and backpack:FindFirstChild(def.label)
+		if tool and tool:IsA("Tool") then
+			humanoid0:EquipTool(tool)
+		end
 	end
 
 	-- CharacterAutoLoads is off so the first spawn can wait for a plot, but
@@ -100,6 +110,7 @@ local function onPlayerAdded(player: Player)
 		return
 	end
 
+	Progression.add(player)
 	PlayerStats.add(player)
 	PlayerStats.setThawed(player, IceField.progress(plot.field))
 	PlayerStats.setFinds(player, plot.finds.found, Discoveries.total(plot.finds))
@@ -115,6 +126,7 @@ end
 
 local function onPlayerRemoving(player: Player)
 	PlayerStats.remove(player)
+	Progression.remove(player)
 	PlotManager.release(player)
 end
 

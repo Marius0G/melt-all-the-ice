@@ -18,9 +18,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Config = require(Shared:WaitForChild("Config"))
 local Feel = require(Shared:WaitForChild("Feel"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
+local Tools = require(Shared:WaitForChild("Tools"))
 
 local modules = script.Parent
 local Audio = require(modules:WaitForChild("Audio"))
@@ -71,16 +71,23 @@ function SwingInput.start()
 				return
 			end
 
+			-- Which tool this is decides the cadence and which gate it spends.
+			-- The server reads the same attribute off its own copy, so this can
+			-- only ever be a prediction of what the server will do anyway.
+			local key = instance:GetAttribute("ToolKey")
+			local def = if typeof(key) == "string" then Tools.get(key) else nil
+			local tool = def or (Tools.get("stone") :: Tools.ToolDef)
+
 			-- Local gates, presentation only - the server re-checks both. Held
 			-- fractionally shorter than the server's so a clock skew never makes
 			-- the client swallow a swing the server would have allowed.
 			local now = os.clock()
-			if now - lastSwing < Config.SWING_COOLDOWN * 0.95 then
+			if now - lastSwing < tool.cooldown * 0.95 then
 				return
 			end
 
-			local stamina = player:GetAttribute("Stamina")
-			if typeof(stamina) == "number" and stamina < Config.STAMINA_PER_SWING then
+			local reserve = player:GetAttribute(if tool.gate == "fuel" then "Fuel" else "Stamina")
+			if typeof(reserve) == "number" and reserve < tool.cost then
 				Crosshair.deny()
 				return
 			end

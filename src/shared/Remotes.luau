@@ -67,6 +67,18 @@ function Remotes.discovery(): RemoteEvent
 	return event("Discovery")
 end
 
+-- Client -> server. Payload is an upgrade key and nothing else; cost and
+-- eligibility are decided entirely on the server.
+function Remotes.purchase(): RemoteEvent
+	return event("Purchase")
+end
+
+-- Server -> client: (key, ok, reason). The reason exists so the shop can say
+-- why a purchase was refused rather than appearing to ignore the click.
+function Remotes.purchaseResult(): RemoteEvent
+	return event("PurchaseResult")
+end
+
 -- Create every remote up front, before any client can ask for one.
 --
 -- The lazy path above is fine on the server, which creates on demand, but the
@@ -77,6 +89,8 @@ function Remotes.initServer()
 	Remotes.swing()
 	Remotes.swingResult()
 	Remotes.discovery()
+	Remotes.purchase()
+	Remotes.purchaseResult()
 end
 
 return Remotes
