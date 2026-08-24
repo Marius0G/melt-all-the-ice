@@ -29,12 +29,14 @@
 	the swap to a different map are all the same code path.
 ]]
 
+local AssetService = game:GetService("AssetService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Feel = require(Shared:WaitForChild("Feel"))
 local GridMath = require(Shared:WaitForChild("GridMath"))
+local IceAssets = require(Shared:WaitForChild("IceAssets"))
 local MapDefs = require(Shared:WaitForChild("MapDefs"))
 
 export type Chunk = {
@@ -105,6 +107,72 @@ local function isExposed(field: IceField, gx: number, gy: number, gz: number): b
 	return false
 end
 
+-- One loaded MeshPart per variant, cloned per chunk. CreateMeshPartAsync yields
+-- on a network round trip and build() lays down hundreds of chunks in a loop, so
+-- fetching inside that loop would stall the server a chunk at a time.
+local templates: { [string]: BasePart } = {}
+
+local function loadCrystal(meshId: string): BasePart?
+	local existing = templates[meshId]
+	if existing then
+		return existing
+	end
+
+	local ok, result = pcall(function()
+		return AssetService:CreateMeshPartAsync(Content.fromUri(meshId), {
+			-- Box is load-bearing here, not a performance setting. Raycasts read
+			-- a MeshPart's collision geometry, so at Box fidelity every ray hits
+			-- a perfect cube however the mesh is shaped - measured at 8.000 dead
+			-- centre and near a corner, identical to a plain Part. That is the
+			-- only reason a shaped chunk is safe at all: the last time chunk
+			-- geometry moved, rays slipped through the gap into the chunk behind
+			-- and mining silently stopped working.
+			CollisionFidelity = Enum.CollisionFidelity.Box,
+			RenderFidelity = Enum.RenderFidelity.Precise,
+		})
+	end)
+	if not ok or not result then
+		warn(string.format("[MeltAllTheIce] could not load ice mesh %s: %s", meshId, tostring(result)))
+		return nil
+	end
+
+	local mesh = result :: MeshPart
+	mesh.Anchored = true
+	mesh.CanCollide = true -- melting in is the only way through
+	mesh.CanTouch = false
+	mesh.CanQuery = true -- being a raycast target is the whole point
+	mesh.CastShadow = false
+	mesh.Material = Feel.ICE_MATERIAL
+	mesh.Reflectance = Feel.ICE_REFLECTANCE
+	mesh.Parent = nil
+
+	templates[meshId] = mesh
+	return mesh
+end
+
+-- Fetch every chunk variant up front, concurrently.
+function IceField.preload()
+	local pending = #IceAssets.VARIANTS
+	if pending == 0 then
+		return
+	end
+	local completed = 0
+	local signal = Instance.new("BindableEvent")
+	for _, meshId in IceAssets.VARIANTS do
+		task.spawn(function()
+			loadCrystal(meshId)
+			completed += 1
+			if completed == pending then
+				signal:Fire()
+			end
+		end)
+	end
+	if completed < pending then
+		signal.Event:Wait()
+	end
+	signal:Destroy()
+end
+
 local function stageFor(ratio: number): number
 	for index, stage in Feel.ICE_STAGES do
 		if ratio > stage.above then
@@ -131,9 +199,10 @@ local function paint(field: IceField, chunk: Chunk)
 		math.clamp(base.G * tint, 0, 1),
 		math.clamp(base.B * tint, 0, 1)
 	)
-	-- Size is deliberately never touched here. These Parts are the raycast
-	-- targets, so resizing a damaged one opens a gap against its neighbours and
-	-- a ray aimed near the boundary slips through into the chunk behind.
+	-- Size and CFrame are deliberately never touched here. These are the raycast
+	-- targets, so moving or resizing a damaged one opens a gap against its
+	-- neighbours and a ray aimed near the boundary slips through into the chunk
+	-- behind. Damage shows as colour and transparency only.
 	chunk.part.Transparency = if chunk.visible then stage.transparency else 1
 end
 
@@ -177,20 +246,32 @@ function IceField.build(field: IceField, def: MapDefs.MapDef?)
 			-- top rather than a flat lid.
 			for gy = 0, GridMath.columnHeight(map, gx, gz) - 1 do
 				local center = GridMath.chunkCenter(map, origin, gx, gy, gz)
+				local cell = GridMath.cellIndex(map, gx, gy, gz)
 
-				local part = Instance.new("Part")
+				-- Variant and quarter-turn both come off the cell index, so the
+				-- field is deterministic: server and client agree, and a rebuild
+				-- reproduces it exactly (AD-3).
+				local template = templates[IceAssets.pick(cell)]
+				local part: BasePart
+				if template then
+					part = template:Clone()
+				else
+					-- A missing mesh should cost the ice its facets, not its
+					-- existence. The plot still works as plain cubes.
+					local block = Instance.new("Part")
+					block.Anchored = true
+					block.CanCollide = true
+					block.CanTouch = false
+					block.CastShadow = false
+					block.Material = Feel.ICE_MATERIAL
+					block.Reflectance = Feel.ICE_REFLECTANCE
+					block.TopSurface = Enum.SurfaceType.Smooth
+					block.BottomSurface = Enum.SurfaceType.Smooth
+					part = block
+				end
 				part.Name = string.format("C%d_%d_%d", gx, gy, gz)
 				part.Size = chunkVector
-				part.CFrame = CFrame.new(center)
-				part.Anchored = true
-				part.CanCollide = true -- melting in is the only way through
-				part.CanTouch = false
-				-- CanQuery stays on; being a raycast target is the whole point.
-				part.CastShadow = false
-				part.Material = Feel.ICE_MATERIAL
-				part.Reflectance = Feel.ICE_REFLECTANCE
-				part.TopSurface = Enum.SurfaceType.Smooth
-				part.BottomSurface = Enum.SurfaceType.Smooth
+				part.CFrame = CFrame.new(center) * IceAssets.spin(cell)
 				part.Transparency = 1 -- corrected by the visibility pass below
 				part.Parent = field.folder
 
@@ -205,7 +286,7 @@ function IceField.build(field: IceField, def: MapDefs.MapDef?)
 					stage = 1,
 				}
 				field.chunks[part] = chunk
-				field.grid[GridMath.cellIndex(map, gx, gy, gz)] = chunk
+				field.grid[cell] = chunk
 				built += 1
 			end
 		end

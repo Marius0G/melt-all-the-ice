@@ -39,11 +39,18 @@ function IceAssets.pick(cell: number): string
 	return VARIANTS[(cell % #VARIANTS) + 1]
 end
 
--- Quarter turns only. Any other angle rotates the bounding box off the grid and
--- reopens the seam the corners exist to close.
+-- Quarter turns only, but on all three axes: a cube stays axis-aligned under any
+-- multiple of 90 degrees, so this is free variety. Three variants spun about one
+-- axis gave twelve looks and the repeat was visible across a wall; three about
+-- all three axes gives seventy-two.
+--
+-- Any angle that is not a multiple of 90 would rotate the bounding box off the
+-- grid and reopen the seam the corners exist to close.
 function IceAssets.spin(cell: number): CFrame
-	local quarter = (cell // #VARIANTS) % 4
-	return CFrame.Angles(0, math.rad(90 * quarter), 0)
+	local x = cell % 4
+	local y = (cell // 4) % 4
+	local z = (cell // 16) % 4
+	return CFrame.Angles(math.rad(90 * x), math.rad(90 * y), math.rad(90 * z))
 end
 
 return IceAssets

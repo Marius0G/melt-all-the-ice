@@ -59,9 +59,10 @@ PhysicsService:CollisionGroupSetCollidable(SHARD_GROUP, "Default", true)
 -- trips, so fetching them lazily during the first plot build serialises the
 -- whole startup behind one request at a time.
 local meshStart = os.clock()
-local pending = 3
+local loaders = { Discoveries.preload, ToolService.preload, SetPieces.preload, IceField.preload }
+local pending = #loaders
 local ready = Instance.new("BindableEvent")
-for _, load in { Discoveries.preload, ToolService.preload, SetPieces.preload } do
+for _, load in loaders do
 	task.spawn(function()
 		load()
 		pending -= 1
