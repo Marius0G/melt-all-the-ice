@@ -58,6 +58,23 @@ Studio ships its own MCP server (no separate install). Turn it on:
 It is already registered with Claude Code as `Roblox_Studio`
 (`cmd.exe /c %LOCALAPPDATA%\Roblox\mcp.bat`). It only does anything while Studio is open.
 
+## Remote-work setup (PC stays on)
+
+This machine is a laptop. On AC power it never sleeps or hibernates; **on battery it sleeps
+after 3 minutes**, which would kill the session. So: leave it plugged in.
+
+Checklist before walking away:
+
+- [ ] Plugged into AC (battery = 3 min to sleep)
+- [ ] Lid open, or lid-close action set to *Do nothing*
+      (`powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0 && powercfg /S SCHEME_CURRENT`)
+- [ ] Roblox Studio open, with **Assistant → … → Manage MCP Servers → Enable Studio as MCP server** ON
+- [ ] Blender restarted, *Interface: Blender MCP* enabled in Preferences → Add-ons,
+      **Start MCP Server** clicked in the N-panel
+- [ ] A Claude Code session running with Remote Control connected
+
+MCP servers are read at session start, so start the session *after* the toggles above.
+
 ## Repo layout
 
 ```
