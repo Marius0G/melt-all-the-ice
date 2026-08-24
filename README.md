@@ -37,17 +37,38 @@ Build a standalone place file without Studio:
 | Tool | Where | Notes |
 |---|---|---|
 | Rojo 7.7.0 | `.tools/rojo.exe` | gitignored, re-download per machine |
+| luau-lsp 1.69.0 | `.tools/luau-lsp.exe` | type checking, gitignored |
 | Rojo Studio plugin | `%LOCALAPPDATA%\Roblox\Plugins\Rojo.rbxm` | installed |
 | Roblox Studio MCP | ships inside Studio | must be toggled on in Studio, see below |
 | Blender 5.1 | `C:\Program Files\Blender Foundation\Blender 5.1` | headless: `blender.exe -b -P script.py` |
 
-Re-download Rojo on a fresh machine:
+Re-download the toolchain on a fresh machine:
 
 ```bash
 mkdir -p .tools && cd .tools
+
+# Rojo
 curl -sL -o rojo.zip https://github.com/rojo-rbx/rojo/releases/download/v7.7.0/rojo-7.7.0-windows-x86_64.zip
 unzip rojo.zip && rm rojo.zip
+
+# luau-lsp + Roblox API type definitions
+curl -sL -o luau-lsp.zip https://github.com/JohnnyMorganz/luau-lsp/releases/download/1.69.0/luau-lsp-win64.zip
+unzip luau-lsp.zip && rm luau-lsp.zip
+curl -sL -o globalTypes.d.luau https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/main/scripts/globalTypes.d.luau
 ```
+
+## Type checking
+
+`.luaurc` sets strict mode, so every file carries `--!strict` and should stay
+type-clean. Check it:
+
+```bash
+.tools/rojo.exe sourcemap default.project.json -o sourcemap.json
+.tools/luau-lsp.exe analyze --sourcemap=sourcemap.json   --definitions=.tools/globalTypes.d.luau src/
+```
+
+The sourcemap is what lets luau-lsp resolve `require(script.Parent.Foo)` to a
+real module and type it, so regenerate it after adding or moving files.
 
 ## Enabling the Studio MCP server
 
