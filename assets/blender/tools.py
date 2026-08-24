@@ -22,7 +22,7 @@ tool's objects out together so their relative positions survive the export.
 import bpy
 import math
 
-from props import box, cone, cylinder, join, sphere
+from props import blade, box, cone, cylinder, frustum, join, sphere
 
 
 def torus(name, major, minor, location=(0, 0, 0), rotation=None, major_segments=8, minor_segments=5):
@@ -76,22 +76,24 @@ def build_axe_body():
     # Slight swell at the butt so it does not slide out of the hand.
     parts.append(cylinder("butt", radius=0.2, depth=0.3, location=(0, 1.5, 0),
                           rotation=(90, 0, 0), verts=8))
+    # Rings, not plates. Square boxes 0.40 across a 0.30 haft stood proud of it
+    # on all four sides, and three of them in a row read as fins.
     for index in range(3):
-        parts.append(box("lash%d" % index, scale=(0.2, 0.09, 0.2),
-                         location=(0, -1.15 + index * 0.22, 0),
-                         rotation=(0, 0, index * 30)))
+        parts.append(torus("lash%d" % index, major=0.185, minor=0.05,
+                           location=(0, -1.16 + index * 0.20, 0),
+                           rotation=(90, 0, 0),
+                           major_segments=8, minor_segments=4))
     return join("Tool_Axe_Body", parts)
 
 
 def build_axe_head():
-    """Knapped stone blade, wide at the edge and thin at the spine."""
-    parts = [box("cheek", scale=(0.17, 0.42, 0.42), location=(0, -1.5, 0))]
-    # Three tapering slabs make a bevelled edge without needing a real taper.
-    for index in range(3):
-        parts.append(box("bevel%d" % index,
-                         scale=(0.15 - index * 0.04, 0.16, 0.46 + index * 0.06),
-                         location=(0, -1.78 - index * 0.22, 0.02 * index)))
-    parts.append(box("poll", scale=(0.14, 0.2, 0.3), location=(0, -1.16, -0.05)))
+    """Knapped stone blade: thick and short at the haft, thin and tall at the edge."""
+    parts = [box("poll", scale=(0.14, 0.20, 0.30), location=(0, -1.16, -0.05))]
+    parts.append(box("cheek", scale=(0.17, 0.26, 0.42), location=(0, -1.48, 0)))
+    # One honest taper. This was three stacked slabs, each thinner and wider
+    # than the last, and every step caught the light - it read as a stack of
+    # fins rather than an edge. See props.blade for why a frustum cannot do it.
+    parts.append(blade("edge", near=(0.16, 0.44, -1.62), far=(0.05, 0.78, -2.44)))
     return join("Tool_Axe_Head", parts)
 
 
@@ -103,12 +105,16 @@ def build_torch_body():
     """Shaft with a pitch-soaked wrap at the business end."""
     parts = [cylinder("shaft", radius=0.13, depth=2.8, location=(0, 0, 0),
                       rotation=(90, 0, 0), verts=8)]
-    parts.append(cylinder("wrap", radius=0.26, depth=0.85, location=(0, -1.15, 0),
-                          rotation=(90, 0, 0), verts=8))
-    for index in range(4):
-        parts.append(box("band%d" % index, scale=(0.29, 0.05, 0.29),
-                         location=(0, -0.85 - index * 0.2, 0),
-                         rotation=(0, 0, index * 24)))
+    # The wrap flares toward the flame, so the head has a direction to it.
+    parts.append(frustum("wrap", radius1=0.20, radius2=0.34, depth=0.95,
+                         location=(0, -1.15, 0), rotation=(90, 0, 0), verts=8))
+    # Binding sized to the wrap where it actually sits. The old bands were
+    # squares wider than the cylinder they were meant to be tied around, spaced
+    # further apart than they were thick, so they hung off it as loose plates.
+    for index, (y, major) in enumerate(((-0.80, 0.235), (-1.35, 0.315))):
+        parts.append(torus("band%d" % index, major=major, minor=0.055,
+                           location=(0, y, 0), rotation=(90, 0, 0),
+                           major_segments=8, minor_segments=4))
     return join("Tool_Torch_Body", parts)
 
 
@@ -198,10 +204,12 @@ def build_chains_body():
     """Wrapped grip trailing a run of chain links."""
     parts = [cylinder("grip", radius=0.17, depth=1.3, location=(0, 0.5, 0),
                       rotation=(90, 0, 0), verts=8)]
-    for index in range(4):
-        parts.append(box("wrap%d" % index, scale=(0.2, 0.08, 0.2),
-                         location=(0, 0.95 - index * 0.28, 0),
-                         rotation=(0, 0, index * 40)))
+    # Same fix as the axe lashing: rings that grip, not squares that hang off.
+    for index in range(3):
+        parts.append(torus("wrap%d" % index, major=0.205, minor=0.05,
+                           location=(0, 0.95 - index * 0.30, 0),
+                           rotation=(90, 0, 0),
+                           major_segments=8, minor_segments=4))
     # Links alternate 90 degrees, which is what makes a chain read as a chain.
     for index in range(7):
         parts.append(torus("link%d" % index, major=0.17, minor=0.055,

@@ -43,20 +43,20 @@ local MODELS: { [string]: ToolModel } = {
 	},
 	axe = {
 		body = {
-			meshId = "rbxassetid://97151578950517",
-			size = Vector3.new(0.436, 0.400, 3.250),
+			meshId = "rbxassetid://132837652655238",
+			size = Vector3.new(0.470, 0.470, 3.250),
 			offset = Vector3.new(0.000, 0.000, 0.000),
 		},
 		head = {
-			meshId = "rbxassetid://130083521107059",
-			size = Vector3.new(0.340, 1.160, 1.420),
-			offset = Vector3.new(0.000, 0.040, -1.695),
+			meshId = "rbxassetid://136201334124217",
+			size = Vector3.new(0.340, 1.560, 1.480),
+			offset = Vector3.new(0.000, 0.000, -1.725),
 		},
 	},
 	torch = {
 		body = {
-			meshId = "rbxassetid://87212374785746",
-			size = Vector3.new(0.580, 0.580, 3.141),
+			meshId = "rbxassetid://91082547319934",
+			size = Vector3.new(0.740, 0.740, 3.025),
 			offset = Vector3.new(0.000, 0.000, 0.000),
 		},
 		flameAt = -1.75,
@@ -101,8 +101,8 @@ local MODELS: { [string]: ToolModel } = {
 	},
 	chains = {
 		body = {
-			meshId = "rbxassetid://133989476789197",
-			size = Vector3.new(0.450, 0.450, 3.185),
+			meshId = "rbxassetid://126418931276375",
+			size = Vector3.new(0.510, 0.510, 3.185),
 			offset = Vector3.new(0.000, 0.000, 0.000),
 		},
 		head = {

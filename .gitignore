@@ -12,6 +12,10 @@ build/
 *.blend1
 *.blend2
 
+# Python bytecode from the Blender build scripts
+__pycache__/
+*.pyc
+
 # OS / editor
 .DS_Store
 Thumbs.db

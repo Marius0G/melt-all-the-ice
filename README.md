@@ -108,6 +108,11 @@ Three things that will bite otherwise:
   what places one against the other in engine.
 - **No textures are exported, deliberately.** `MeshPart.Color` only applies to an untextured
   mesh, so colour stays in the palette with everything else.
+- **Do not fake a taper with stacked boxes.** The axe blade and the torch wrap were each built
+  as a stack of flat boxes standing in for a bevel. Every step caught the light and they read as
+  loose fins rather than one shape. `props.frustum` gives a real taper, and `props.blade` builds
+  a box with independently sized ends — the one thing a frustum cannot do, because it scales
+  both cross-section axes together and a blade is *taller and thinner* at the edge.
 
 Some things stay Parts on purpose: the ice chunks (they are the raycast and HP units, and
 there are thousands of them), the finale beacons (the finale swaps them to Neon and hangs a

@@ -17,6 +17,7 @@ the palette in one place with the rest of the game.
 Scale is in studs: 1 Blender unit = 1 stud, authored so a chunk is 4 units.
 """
 
+import bmesh
 import bpy
 import math
 import os
@@ -67,6 +68,60 @@ def cone(name, radius=1.0, depth=2.0, location=(0, 0, 0), rotation=None, verts=6
         vertices=verts, radius1=radius, radius2=0.0, depth=depth, location=location
     )
     return _finish(name, location, rotation, None)
+
+
+def frustum(name, radius1, radius2, depth, location=(0, 0, 0), rotation=None,
+            scale=None, verts=8):
+    """A truncated cone - a cone that stops before it reaches a point.
+
+    This is the honest way to make something flare: a torch wrap that gets
+    fatter toward the flame used to be a plain cylinder with square bands
+    stacked around it, and at any angle the bands read as loose plates rather
+    than as binding.
+    """
+    bpy.ops.mesh.primitive_cone_add(
+        vertices=verts, radius1=radius1, radius2=radius2, depth=depth,
+        location=location,
+    )
+    return _finish(name, location, rotation, scale)
+
+
+def blade(name, near, far):
+    """A box with independently sized ends, built from explicit vertices.
+
+    `near` and `far` are (half_thickness, half_height, y) - the two rectangles
+    the shape spans between, along the tool's forward axis.
+
+    A frustum cannot do this. It scales both cross-section axes together, so it
+    can be wider at the far end or narrower, but never *taller and thinner* -
+    which is exactly what a blade is. Faking it with stacked slabs was worse:
+    each slab was both thinner and wider than the last, so every step caught
+    the light and three of them read as fins, not as an edge.
+    """
+    hx0, hz0, y0 = near
+    hx1, hz1, y1 = far
+    verts = [
+        (-hx0, y0, -hz0), (hx0, y0, -hz0), (hx0, y0, hz0), (-hx0, y0, hz0),
+        (-hx1, y1, -hz1), (hx1, y1, -hz1), (hx1, y1, hz1), (-hx1, y1, hz1),
+    ]
+    faces = [
+        (0, 1, 2, 3), (7, 6, 5, 4), (0, 4, 5, 1),
+        (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0),
+    ]
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(verts, [], faces)
+    mesh.validate()
+    # from_pydata takes the winding on trust, and a face wound the wrong way
+    # renders black. Recalculate rather than hand-check six of them.
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(mesh)
+    bm.free()
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(obj)
+    return obj
 
 
 def sphere(name, radius=1.0, location=(0, 0, 0), scale=None, subdiv=1):
