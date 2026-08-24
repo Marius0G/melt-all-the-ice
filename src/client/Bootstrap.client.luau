@@ -7,6 +7,7 @@
 local modules = script.Parent
 
 local WorldLight = require(modules:WaitForChild("WorldLight"))
+local Codex = require(modules:WaitForChild("Codex"))
 local Crosshair = require(modules:WaitForChild("Crosshair"))
 local HUD = require(modules:WaitForChild("HUD"))
 local MeltEffects = require(modules:WaitForChild("MeltEffects"))
@@ -18,6 +19,7 @@ WorldLight.start()
 HUD.start()
 Toast.start()
 SkillTree.start()
+Codex.start()
 Crosshair.start()
 MeltEffects.start()
 SwingInput.start()

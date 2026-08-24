@@ -1,6 +1,6 @@
 --!strict
 --[[
-	HUD - money, progress, finds, and the two swing gates.
+	HUD - money, progress, finds, the combo meter, and the two swing gates.
 
 	Reads Player attributes, which the server owns and the client cannot write.
 	This file renders numbers and nothing else; it never computes a value it
@@ -12,6 +12,11 @@
 	The gate bar swaps with the equipped tool rather than showing both. Stamina
 	and fuel are never spent at the same time - only one tool is in hand - so two
 	bars would mean one of them is always stale decoration.
+
+	The combo meter is the one piece here that is *only* feedback: it shows a
+	number the server already applied. It sits top-centre and hides itself at
+	zero rather than sitting there greyed out, because a meter that is always on
+	screen showing nothing trains you to stop looking at it.
 ]]
 
 local Players = game:GetService("Players")
@@ -19,6 +24,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UITheme = require(script.Parent:WaitForChild("UITheme"))
 local Feel = require(Shared:WaitForChild("Feel"))
 local Tools = require(Shared:WaitForChild("Tools"))
 
@@ -228,6 +234,85 @@ function HUD.start()
 		TweenService:Create(progressFill, TweenInfo.new(0.25), { Size = UDim2.fromScale(fraction, 1) }):Play()
 	end
 
+	-- Combo badge, top centre. Built here rather than in the panel above
+	-- because it is not a readout of state - it appears, grows and leaves.
+	local comboBadge = Instance.new("Frame")
+	comboBadge.Name = "Combo"
+	comboBadge.Size = UDim2.fromOffset(190, 66)
+	comboBadge.Position = UDim2.new(0.5, 0, 0, 22)
+	comboBadge.AnchorPoint = Vector2.new(0.5, 0)
+	comboBadge.BackgroundColor3 = Color3.new(1, 1, 1)
+	comboBadge.BorderSizePixel = 0
+	comboBadge.Visible = false
+	comboBadge.Parent = gui
+	corner(comboBadge, 16)
+	UITheme.outline(comboBadge, 3)
+
+	local comboGradient = Instance.new("UIGradient")
+	comboGradient.Rotation = 90
+	comboGradient.Parent = comboBadge
+
+	local comboCount = Instance.new("TextLabel")
+	comboCount.Size = UDim2.new(1, 0, 0, 38)
+	comboCount.Position = UDim2.fromOffset(0, 4)
+	comboCount.BackgroundTransparency = 1
+	comboCount.Font = Enum.Font.FredokaOne
+	comboCount.TextSize = 32
+	comboCount.TextColor3 = Color3.new(1, 1, 1)
+	comboCount.Text = ""
+	comboCount.Parent = comboBadge
+	UITheme.outline(comboCount, 3)
+
+	local comboPay = Instance.new("TextLabel")
+	comboPay.Size = UDim2.new(1, 0, 0, 20)
+	comboPay.Position = UDim2.fromOffset(0, 40)
+	comboPay.BackgroundTransparency = 1
+	comboPay.Font = Enum.Font.GothamBlack
+	comboPay.TextSize = 14
+	comboPay.TextColor3 = Color3.fromRGB(24, 20, 12)
+	comboPay.Text = ""
+	comboPay.Parent = comboBadge
+
+	local comboScale = Instance.new("UIScale")
+	comboScale.Parent = comboBadge
+
+	-- Matches Combo.STEP and Combo.CAP on the server. Duplicated rather than
+	-- required across the boundary because the client must never be the one
+	-- deciding what a streak is worth - this only has to *say* the same thing.
+	local COMBO_STEP = 0.02
+	local COMBO_CAP = 50
+
+	local function renderCombo()
+		local count = toNumber(player:GetAttribute("Combo"), 0)
+		if count <= 0 then
+			comboBadge.Visible = false
+			return
+		end
+
+		local heat = math.clamp(count / COMBO_CAP, 0, 1)
+		local warm = STAMINA:Lerp(FUEL, heat)
+		comboGradient.Color = ColorSequence.new(
+			warm:Lerp(Color3.new(1, 1, 1), 0.35),
+			warm:Lerp(Color3.new(0, 0, 0), 0.25)
+		)
+		comboCount.Text = string.format("x%d", count)
+		comboPay.Text = string.format(
+			"%.2fx PAYOUT",
+			1 + math.min(count, COMBO_CAP) * COMBO_STEP
+		)
+
+		local wasHidden = not comboBadge.Visible
+		comboBadge.Visible = true
+		-- A kick on every increment, so the meter feels struck rather than
+		-- redrawn. Bigger on the first one, when it has just appeared.
+		comboScale.Scale = if wasHidden then 0.6 else 1.16
+		TweenService:Create(
+			comboScale,
+			TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+			{ Scale = 1 }
+		):Play()
+	end
+
 	local function renderFinds()
 		foundLabel.Text = string.format(
 			"%d / %d found",
@@ -258,7 +343,9 @@ function HUD.start()
 		barLabel.TextColor3 = tint
 	end
 
-	for _, name in { "Money", "ThawedPct", "Found", "FoundTotal", "Stamina", "StaminaMax", "Fuel", "FuelMax" } do
+	for _, name in
+		{ "Money", "ThawedPct", "Found", "FoundTotal", "Stamina", "StaminaMax", "Fuel", "FuelMax", "Combo" }
+	do
 		player:GetAttributeChangedSignal(name):Connect(function()
 			if name == "Money" then
 				renderMoney()
@@ -266,6 +353,8 @@ function HUD.start()
 				renderThawed()
 			elseif name == "Found" or name == "FoundTotal" then
 				renderFinds()
+			elseif name == "Combo" then
+				renderCombo()
 			else
 				renderGate()
 			end
@@ -294,6 +383,7 @@ function HUD.start()
 	renderThawed()
 	renderFinds()
 	renderGate()
+	renderCombo()
 end
 
 return HUD

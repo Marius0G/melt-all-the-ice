@@ -13,6 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Feel = require(Shared:WaitForChild("Feel"))
+local Rarity = require(Shared:WaitForChild("Rarity"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 
 local modules = script.Parent
@@ -83,7 +84,13 @@ local function onSwingResult(
 	end
 end
 
-local function onDiscovery(position: unknown, label: unknown, reward: unknown, hero: unknown)
+local function onDiscovery(
+	position: unknown,
+	label: unknown,
+	reward: unknown,
+	hero: unknown,
+	rarityKey: unknown
+)
 	if typeof(position) ~= "Vector3" or typeof(label) ~= "string" then
 		return
 	end
@@ -92,15 +99,33 @@ local function onDiscovery(position: unknown, label: unknown, reward: unknown, h
 	local payout = if typeof(reward) == "number" then reward else 0
 	local isHero = hero == true
 
+	-- The tier decides how loud this is. A common pot and a legendary mammoth
+	-- used to get the same burst, the same shake and the same two seconds of
+	-- label, which threw away the one moment the game has to feel like a jackpot.
+	local tier = (if typeof(rarityKey) == "string" then Rarity.get(rarityKey) else nil) or Rarity.COMMON
+
 	-- Deliberately delayed. The shatter that uncovered this is still playing;
 	-- landing on top of it makes the two read as one muddled event instead of
 	-- cause and consequence.
 	task.delay(Feel.REVEAL_DELAY, function()
-		Particles.reveal(at)
-		CameraShake.impulse(Feel.SHAKE_REVEAL)
-		Audio.playAt(Audio.pick(Feel.SOUNDS.REVEAL), at, { volume = 0.7, speed = if isHero then 1.0 else 1.15 })
-		Popups.show(at + Vector3.new(0, 2, 0), string.format("+$%d", payout), Feel.MONEY, if isHero then 1.6 else 1.25)
-		Toast.show(name, payout, isHero)
+		Particles.reveal(at, tier.glow, tier.shards)
+		CameraShake.impulse({
+			duration = Feel.SHAKE_REVEAL.duration,
+			magnitude = Feel.SHAKE_REVEAL.magnitude * tier.shake,
+			roughness = Feel.SHAKE_REVEAL.roughness,
+		})
+		Audio.playAt(Audio.pick(Feel.SOUNDS.REVEAL), at, {
+			volume = 0.7,
+			-- Rarer finds ring lower, which is what makes them sound heavier.
+			speed = 1.25 - tier.order * 0.06,
+		})
+		Popups.show(
+			at + Vector3.new(0, 2, 0),
+			string.format("+$%d", payout),
+			tier.color,
+			1.1 + tier.order * 0.18
+		)
+		Toast.show(name, payout, isHero, tier)
 	end)
 end
 
@@ -118,6 +143,24 @@ function MeltEffects.start()
 	CameraShake.start()
 	Remotes.swingResult().OnClientEvent:Connect(onSwingResult)
 	Remotes.discovery().OnClientEvent:Connect(onDiscovery)
+
+	Remotes.claimResult().OnClientEvent:Connect(function(_, ok, reward, message)
+		if ok == true then
+			Toast.notice("QUEST COMPLETE", tostring(message), if typeof(reward) == "number" then reward else 0)
+		end
+		-- A refusal is silent on purpose. The only way to press a locked CLAIM
+		-- is to race the server, and a banner saying "not finished" for that is
+		-- noise rather than information.
+	end)
+
+	Remotes.rebirthResult().OnClientEvent:Connect(function(ok, message)
+		Toast.notice(
+			if ok == true then "REBIRTH" else "NOT YET",
+			tostring(message),
+			0,
+			if ok == true then Color3.fromRGB(255, 200, 38) else Color3.fromRGB(224, 88, 88)
+		)
+	end)
 	Remotes.finale().OnClientEvent:Connect(onFinale)
 end
 

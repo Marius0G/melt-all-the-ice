@@ -175,14 +175,27 @@ local function sparkEmitter(): ParticleEmitter
 	return emitter
 end
 
-function Particles.reveal(position: Vector3)
+-- `tint` and `count` come from the find's rarity tier, so a legendary throws a
+-- gold burst four times the size of a common's. Both optional: a caller that
+-- does not know the tier gets what this always did.
+function Particles.reveal(position: Vector3, tint: Color3?, count: number?)
 	if not withinRange(position) then
 		return
 	end
 	local attachment = Instance.new("Attachment")
 	attachment.WorldPosition = position
 	attachment.Parent = Workspace.Terrain
-	fire(attachment, { sparkEmitter(), puffEmitter() }, { Feel.SPARKS_ON_REVEAL, 10 })
+
+	local sparks = sparkEmitter()
+	if tint then
+		sparks.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+			ColorSequenceKeypoint.new(0.4, tint),
+			ColorSequenceKeypoint.new(1, tint:Lerp(Color3.new(0, 0, 0), 0.5)),
+		})
+	end
+
+	fire(attachment, { sparks, puffEmitter() }, { count or Feel.SPARKS_ON_REVEAL, 10 })
 end
 
 -- `broke` is how many chunks went at once. An area tool taking out a dozen

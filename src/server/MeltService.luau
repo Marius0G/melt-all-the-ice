@@ -190,9 +190,13 @@ local function resolveStrike(
 		)
 		if fired then
 			Progression.recordMapCleared(player)
-			-- Clearing a map is what unlocks the next one.
+			-- Clearing a map is what unlocks the next one. Clearing the *last*
+			-- one unlocks nothing, so it has to be recorded on its own or there
+			-- would be no way to tell it had happened.
 			if following then
 				Progression.unlock(player, following.id)
+			else
+				Progression.markFinished(player)
 			end
 
 			task.delay(Finale.resetDelay(), function()

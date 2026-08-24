@@ -41,6 +41,7 @@ export type Save = {
 	skins: { [string]: boolean },
 	equippedSkins: { [string]: string },
 	rebirths: number,
+	finished: boolean,
 	collection: { [string]: number },
 	questDay: number,
 	questProgress: { [string]: number },
@@ -65,6 +66,7 @@ local function emptySave(): Save
 		skins = {},
 		equippedSkins = {},
 		rebirths = 0,
+		finished = false,
 		collection = {},
 		questDay = 0,
 		questProgress = {},
@@ -169,6 +171,7 @@ function SaveService.load(player: Player): Save
 	if typeof(data.rebirths) == "number" then
 		save.rebirths = math.max(0, math.floor(data.rebirths))
 	end
+	save.finished = data.finished == true
 	if typeof(data.collection) == "table" then
 		for key, count in data.collection do
 			if typeof(key) == "string" and typeof(count) == "number" then
@@ -234,7 +237,7 @@ local function fingerprint(save: Save): string
 
 	-- These have to be in the fingerprint or the de-duplication would decide
 	-- nothing had changed and quietly skip the write.
-	table.insert(parts, "rb:" .. tostring(save.rebirths))
+	table.insert(parts, "rb:" .. tostring(save.rebirths) .. tostring(save.finished))
 
 	local found = {}
 	for key, count in save.collection do

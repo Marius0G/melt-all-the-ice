@@ -16,6 +16,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Feel = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Feel"))
+local Rarity = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Rarity"))
 
 local Toast = {}
 
@@ -26,7 +27,7 @@ local PANEL_TOP = Color3.fromRGB(46, 62, 92)
 local PANEL_BOTTOM = Color3.fromRGB(22, 32, 52)
 
 local gui: ScreenGui? = nil
-local queue: { { label: string, reward: number, hero: boolean } } = {}
+local queue: { { label: string, reward: number, hero: boolean, tier: Rarity.Tier?, heading: string?, tint: Color3? } } = {}
 local showing = false
 
 local function addShadow(parent: GuiObject, offset: number, blur: number, transparency: number)
@@ -55,7 +56,7 @@ local function build(): ScreenGui
 	return screen
 end
 
-local function present(entry: { label: string, reward: number, hero: boolean })
+local function present(entry: { label: string, reward: number, hero: boolean, tier: Rarity.Tier?, heading: string?, tint: Color3? })
 	local screen = gui
 	if not screen then
 		return
@@ -111,8 +112,12 @@ local function present(entry: { label: string, reward: number, hero: boolean })
 	heading.BackgroundTransparency = 1
 	heading.Font = Enum.Font.GothamBold
 	heading.TextSize = 14
-	heading.TextColor3 = if entry.hero then GOLD else Feel.ICE_MID
-	heading.Text = if entry.hero then "RARE FIND" else "UNCOVERED"
+	-- The tier is the whole headline now: "LEGENDARY" in gold reads as an event
+	-- in a way that "RARE FIND" on everything above a pot never did.
+	heading.TextColor3 = entry.tint
+		or (if entry.tier then entry.tier.color elseif entry.hero then GOLD else Feel.ICE_MID)
+	heading.Text = entry.heading
+		or (if entry.tier then string.upper(entry.tier.label) else "UNCOVERED")
 	heading.Parent = panel
 
 	local title = Instance.new("TextLabel")
@@ -132,6 +137,8 @@ local function present(entry: { label: string, reward: number, hero: boolean })
 	reward.Font = Enum.Font.GothamBold
 	reward.TextSize = 19
 	reward.TextColor3 = GOLD
+	-- A rebirth pays nothing, and "+$0" under it reads as a bug.
+	reward.Visible = entry.reward > 0
 	reward.Text = string.format("+$%d", entry.reward)
 	reward.Parent = panel
 
@@ -144,7 +151,7 @@ local function present(entry: { label: string, reward: number, hero: boolean })
 		})
 		:Play()
 
-	local hold = if entry.hero then 2.6 else 1.9
+	local hold = if entry.tier then entry.tier.hold else (if entry.hero then 2.6 else 1.9)
 	task.delay(hold, function()
 		if not panel.Parent then
 			return
@@ -305,8 +312,21 @@ function Toast.start()
 	gui = build()
 end
 
-function Toast.show(label: string, reward: number, hero: boolean)
-	table.insert(queue, { label = label, reward = reward, hero = hero })
+function Toast.show(label: string, reward: number, hero: boolean, tier: Rarity.Tier?)
+	table.insert(queue, { label = label, reward = reward, hero = hero, tier = tier })
+	pump()
+end
+
+-- Same banner, different words. Used for anything that is not a find: a quest
+-- paying out, a rebirth landing, a refusal coming back from the server.
+function Toast.notice(heading: string, label: string, reward: number?, tint: Color3?)
+	table.insert(queue, {
+		label = label,
+		reward = reward or 0,
+		hero = false,
+		heading = heading,
+		tint = tint,
+	})
 	pump()
 end
 

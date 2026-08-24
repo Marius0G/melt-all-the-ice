@@ -138,6 +138,7 @@ local function onPlayerAdded(player: Player)
 		skins = save.skins,
 		equipped = save.equippedSkins,
 		rebirths = save.rebirths,
+		finished = save.finished,
 		collection = save.collection,
 		questDay = save.questDay,
 		questProgress = save.questProgress,
@@ -178,6 +179,7 @@ local function collect(player: Player): SaveService.Save
 		skins = Progression.ownedSkins(player),
 		equippedSkins = Progression.equippedSkins(player),
 		rebirths = Progression.rebirths(player),
+		finished = Progression.finished(player),
 		collection = Progression.collection(player),
 		-- The day travels with the progress. Without it a save made yesterday
 		-- would restore yesterday's counters against today's three quests.

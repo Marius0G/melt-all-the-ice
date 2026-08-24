@@ -32,6 +32,7 @@ export type Record = {
 	skins: { [string]: boolean }, -- owned
 	equipped: { [string]: string }, -- tool key -> skin key
 	rebirths: number,
+	finished: boolean, -- has cleared the final map since the last rebirth
 	collection: { [string]: number }, -- prop key -> how many ever uncovered
 	questDay: number,
 	questProgress: { [string]: number },
@@ -47,6 +48,7 @@ export type Restored = {
 	skins: { [string]: boolean }?,
 	equipped: { [string]: string }?,
 	rebirths: number?,
+	finished: boolean?,
 	collection: { [string]: number }?,
 	questDay: number?,
 	questProgress: { [string]: number }?,
@@ -100,6 +102,7 @@ end
 local function pushRebirths(player: Player)
 	local record = records[player]
 	player:SetAttribute("Rebirths", if record then record.rebirths else 0)
+	player:SetAttribute("Finished", if record then record.finished else false)
 end
 
 function Progression.add(player: Player, saved: Restored?)
@@ -199,6 +202,7 @@ function Progression.add(player: Player, saved: Restored?)
 		skins = skins,
 		equipped = equipped,
 		rebirths = math.max(0, math.floor((saved and saved.rebirths) or 0)),
+		finished = (saved and saved.finished) == true,
 		collection = collection,
 		questDay = today,
 		questProgress = questProgress,
@@ -412,6 +416,11 @@ end
 -- shape attributes are good at, and it keeps the panels honest: the client can
 -- read them and cannot write them.
 
+function Progression.finished(player: Player): boolean
+	local record = records[player]
+	return record ~= nil and record.finished
+end
+
 function Progression.rebirths(player: Player): number
 	local record = records[player]
 	return if record then record.rebirths else 0
@@ -424,16 +433,23 @@ function Progression.rebirthMultiplier(player: Player): number
 	return 1 + Progression.rebirths(player) * 0.25
 end
 
--- A rebirth is earned by clearing the last map, which is the only thing in the
--- game that unlocks nothing else. Checked here rather than trusted from the
--- client, like every other purchase.
+-- Set when the final map is cleared. It needs its own flag rather than reading
+-- the unlock set: clearing a map unlocks the *next* one, so the last map being
+-- unlocked only means the one before it was finished. Checking `maps[last]`
+-- would have handed out a rebirth for clearing the pyramid.
+function Progression.markFinished(player: Player)
+	local record = records[player]
+	if not record or record.finished then
+		return
+	end
+	record.finished = true
+	player:SetAttribute("Finished", true)
+end
+
+-- Checked here rather than trusted from the client, like every other purchase.
 function Progression.canRebirth(player: Player): boolean
 	local record = records[player]
-	if not record then
-		return false
-	end
-	local last = MapDefs.DEFS[#MapDefs.DEFS]
-	return record.maps[last.id] == true
+	return record ~= nil and record.finished
 end
 
 -- Wipes upgrades, tools, map unlocks and the current map; keeps skins, the
@@ -449,6 +465,8 @@ function Progression.rebirth(player: Player): (boolean, string)
 	end
 
 	record.rebirths += 1
+	record.finished = false
+	player:SetAttribute("Finished", false)
 	for _, def in Upgrades.DEFS do
 		record.levels[def.key] = 0
 		push(player, def.key, 0)
