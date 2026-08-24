@@ -49,9 +49,9 @@ local function makeSpawn(index: number, origin: Vector3): SpawnLocation
 	spawn.BrickColor = BrickColor.new("Dark stone grey")
 	spawn.Parent = Workspace
 
-	-- The only warm light in a sealed rock chamber, standing in for the
-	-- campfire in docs/reference/cave-mid-state.png. Gives the player somewhere
-	-- legible to start from before any light-bearing tool exists.
+	-- The only warm light in a sealed rock chamber, standing in for the lantern
+	-- in docs/reference/cave-mid-state.png. Gives the player somewhere legible
+	-- to start from before any light-bearing tool exists.
 	local glow = Instance.new("PointLight")
 	glow.Name = "SpawnGlow"
 	glow.Brightness = 1.4

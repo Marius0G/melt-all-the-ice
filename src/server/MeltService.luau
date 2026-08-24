@@ -82,10 +82,25 @@ local function onSwing(player: Player, direction: unknown)
 		return
 	end
 
-	if IceField.damage(plot.field, hit, Config.STONE_DAMAGE) then
+	local outcome = IceField.damage(plot.field, hit, Config.STONE_DAMAGE)
+	if not outcome then
+		return
+	end
+
+	if outcome.destroyed then
 		PlayerStats.addMoney(player, Config.MONEY_PER_CHUNK)
 		PlayerStats.setThawed(player, IceField.progress(plot.field))
 	end
+
+	-- Cosmetics are the client's job, but it is told what happened rather than
+	-- asked. Everything that decided an outcome is already settled above.
+	Remotes.swingResult():FireClient(
+		player,
+		result.Position,
+		result.Normal,
+		outcome.destroyed,
+		outcome.hpRatio
+	)
 end
 
 function MeltService.init()

@@ -27,6 +27,12 @@ export type Chunk = {
 	center: Vector3,
 }
 
+export type DamageResult = {
+	destroyed: boolean,
+	center: Vector3,
+	hpRatio: number, -- fraction of HP left after the hit; 0 once destroyed
+}
+
 export type IceField = {
 	index: number,
 	origin: Vector3,
@@ -105,17 +111,26 @@ function IceField.new(index: number): IceField
 	return field
 end
 
--- Apply damage to the chunk backing `part`. Returns true only on the hit that
--- destroys it, which is the caller's cue to pay out.
-function IceField.damage(field: IceField, part: BasePart, amount: number): boolean
+-- Apply damage to the chunk backing `part`. Returns nil when `part` is not a
+-- live chunk of this field; otherwise a result describing what the hit did.
+-- `destroyed` is the caller's cue to pay out.
+--
+-- The caller needs more than a yes/no: the client has to draw a different
+-- effect for a chip than for a shatter, and it cannot be trusted to work that
+-- out for itself.
+function IceField.damage(field: IceField, part: BasePart, amount: number): DamageResult?
 	local chunk = field.chunks[part]
 	if not chunk then
-		return false
+		return nil
 	end
 
 	chunk.hp -= amount
 	if chunk.hp > 0 then
-		return false
+		return {
+			destroyed = false,
+			center = chunk.center,
+			hpRatio = chunk.hp / Config.CHUNK_HP,
+		}
 	end
 
 	-- Visual layer first, then the authoritative one.
@@ -123,7 +138,7 @@ function IceField.damage(field: IceField, part: BasePart, amount: number): boole
 	field.chunks[part] = nil
 	part:Destroy()
 	field.destroyed += 1
-	return true
+	return { destroyed = true, center = chunk.center, hpRatio = 0 }
 end
 
 -- Fraction thawed, 0..1.

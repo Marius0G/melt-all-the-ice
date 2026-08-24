@@ -19,8 +19,12 @@ local Config = {
 	GRID_Z = 16,
 
 	-- Plots (AD-2). PLOT_COUNT caps players per server.
+	-- PLOT_SPACING must stay above Workspace.StreamingTargetRadius (512, set in
+	-- default.project.json) or clients stream in their neighbours' plots -
+	-- thousands of parts nobody can see. It also has to leave room for the
+	-- largest map, not just the cave.
 	PLOT_COUNT = 6,
-	PLOT_SPACING = 512,
+	PLOT_SPACING = 1024,
 
 	-- Cave shell, in studs. All multiples of CHUNK_SIZE to stay voxel-aligned.
 	WALKWAY = 12, -- air ring around the ice, at floor level

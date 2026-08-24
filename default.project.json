@@ -20,11 +20,19 @@
 
     "Workspace": {
       "$properties": {
-        "StreamingEnabled": true
+        "StreamingEnabled": true,
+        "StreamingMinRadius": 128,
+        "StreamingTargetRadius": 512,
+        "StreamingIntegrityMode": "PauseOutsideLoadedArea"
       }
     },
 
-    "Lighting": {},
+    "Lighting": {
+      "$properties": {
+        "Technology": "ShadowMap"
+      }
+    },
+
     "SoundService": {},
     "ServerStorage": {}
   }

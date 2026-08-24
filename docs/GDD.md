@@ -29,7 +29,17 @@ dinosaur bones, mammoths, frozen people. These are the discovery hook.
 
 - Reference: `docs/reference/cave-mid-state.png` (mid-melt), `cave-end-state.png` (end state)
 - Start state: fully iced-over cavern, no light source.
-- End state: open cave, water pooled at the bottom, warm light.
+- Mid state: still dark and blue, meltwater pooling on the floor, a single lantern.
+- End state: the cave mouth blown open to daylight, a campfire lit, warm light, a few blue
+  ice pillars left standing.
+
+> **Correction (2026-08-24):** the two cave reference files were named the wrong way round,
+> and an earlier version of this document repeated the error. Checked against the captions in
+> `Document 7.pdf`: the 416x416 bright image sits with *"Asta ar fi finalul hartii"* (the end)
+> and the 607x341 dark image with *"Si asta undeva pe la mijloc"* (the middle). The files have
+> been renamed to match. The arc runs **dark and blue -> bright and warm**, which is also the
+> tool arc: the map starts with no light source and its capstone is learning to make fire.
+> **Lighting is the progress bar**, and meltwater pooling on the floor is the other half of it.
 
 **Tools:** start with a bare **stone**. Progress → find a **stick**, tie it to the stone →
 **axe**. The skill tree's capstone on this map is *learning to make fire*, so the final
@@ -142,9 +152,51 @@ retrofitting a reset path later.
 Plot release on player leave should re-freeze too, so a recycled plot never hands the next
 player a half-melted map.
 
+### AD-4: Maps are data, not code
+
+Cave / Pyramid / Troy are three **map definitions** consumed by one generic builder, not three
+generators. `src/shared/MapDefs.luau` holds volume, chunk size, palette, lighting arc, prop set,
+tool set and finale; `src/server/MapBuilder.luau` turns a definition plus a plot origin into a
+built map, idempotently (AD-3).
+
+This is what makes three maps tractable, and it lets each map choose its own `CHUNK_SIZE`
+(4 for the cave, 8 for the much larger pyramid — both multiples of the 4-stud terrain voxel)
+so a bigger map does not mean proportionally more Parts.
+
+### AD-5: A plot hosts one map at a time
+
+A player is only ever *on* one map, so a plot holds the current one and rebuilds when the player
+advances, rather than holding all three at once. Terrain memory therefore stays flat as maps are
+added, which is what keeps AD-2's plot count viable. `build(origin)` becomes
+`build(origin, mapId)`; the idempotence AD-3 already demands is exactly the mechanism.
+
+### AD-6: Per-player presentation goes through the client
+
+The same trap as the Terrain singleton, one layer up: `Lighting` is a **global service**, so a
+per-player lighting arc cannot be driven from the server. Two mechanisms, both genuinely
+per-player:
+
+- **Client-side `Lighting` edits.** A LocalScript changing `Lighting` / `Atmosphere` /
+  `ColorCorrection` affects only that client. This drives the global grade from the player's own
+  `ThawedPct` attribute.
+- **Local lights inside the plot.** Anything positional is a light parented to plot geometry;
+  StreamingEnabled keeps it off every other client.
+
+The server stays authoritative for **state**; the client owns **presentation**. No cosmetic ever
+decides an outcome.
+
+## Settled tuning
+
+| Value | Setting | Why |
+|---|---|---|
+| Chunk grid | 4 studs, 16 x 6 x 16 per cave plot | 4 studs is exactly one terrain voxel |
+| Plot count | 6, built lazily on join | Caps players/server; lazy build keeps idle cost at zero |
+| Chunk HP | 30 (stone does 10) | Three hits means three visible crack states, not one |
+| Ice look | Visible Parts, `SmoothPlastic`, ~0.25 transparent | Terrain's PBR grit fights the cartoony target |
+
 ## Still open
 
 - **Monetization** — gamepasses / dev products aren't in the source doc but are the norm for
   this genre. Out of scope until asked.
-- **Chunk grid resolution** and **plot count** — tuning values, settle them by feel once the
-  cave is playable.
+- **Weapon customization** — in the source notes, not yet designed. Cosmetic variants on the
+  same base tool, selected by the player.
