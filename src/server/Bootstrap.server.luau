@@ -11,15 +11,18 @@ local SoundService = game:GetService("SoundService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GridMath = require(Shared:WaitForChild("GridMath"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
+local Tools = require(Shared:WaitForChild("Tools"))
 
 local modules = script.Parent
 local Ambience = require(modules:WaitForChild("Ambience"))
 local Discoveries = require(modules:WaitForChild("Discoveries"))
+local Finale = require(modules:WaitForChild("Finale"))
 local IceField = require(modules:WaitForChild("IceField"))
 local MeltService = require(modules:WaitForChild("MeltService"))
 local PlayerStats = require(modules:WaitForChild("PlayerStats"))
 local PlotManager = require(modules:WaitForChild("PlotManager"))
 local Progression = require(modules:WaitForChild("Progression"))
+local SaveService = require(modules:WaitForChild("SaveService"))
 local ShopService = require(modules:WaitForChild("ShopService"))
 
 -- Characters load only once a plot is reserved, so nobody spawns adrift at the
@@ -81,7 +84,7 @@ local function onCharacterAdded(player: Player, character: Model)
 	local humanoid0 = character:FindFirstChildOfClass("Humanoid")
 	if backpack and humanoid0 then
 		local best = Progression.bestTool(player)
-		local def = require(Shared:WaitForChild("Tools")).get(best)
+		local def = Tools.get(best)
 		local tool = def and backpack:FindFirstChild(def.label)
 		if tool and tool:IsA("Tool") then
 			humanoid0:EquipTool(tool)
@@ -110,8 +113,12 @@ local function onPlayerAdded(player: Player)
 		return
 	end
 
-	Progression.add(player)
-	PlayerStats.add(player)
+	-- Load before anything reads a level or a balance. Never returns nil: a
+	-- player whose data cannot be read starts fresh and plays rather than being
+	-- turned away.
+	local save = SaveService.load(player)
+	Progression.add(player, save.upgrades)
+	PlayerStats.add(player, save.money)
 	PlayerStats.setThawed(player, IceField.progress(plot.field))
 	PlayerStats.setFinds(player, plot.finds.found, Discoveries.total(plot.finds))
 	player.RespawnLocation = plot.spawn
@@ -124,11 +131,33 @@ local function onPlayerAdded(player: Player)
 	print(string.format("[MeltAllTheIce] %s -> plot %d", player.Name, plot.index))
 end
 
+-- What a save is made of, gathered from whoever owns each piece.
+local function collect(player: Player): SaveService.Save
+	local stats = PlayerStats.get(player)
+	return {
+		version = 1,
+		money = if stats then stats.money else 0,
+		upgrades = Progression.levels(player),
+		-- Map progress is deliberately absent: plots re-freeze on release
+		-- (AD-3), so a map always begins frozen.
+		unlockedMaps = { cave = true },
+	}
+end
+
 local function onPlayerRemoving(player: Player)
+	-- Save before tearing the record down, or there is nothing left to save.
+	SaveService.save(player, collect(player), true)
+	SaveService.forget(player)
+	local plot = PlotManager.get(player)
+	if plot then
+		Finale.clear(plot.index)
+	end
 	PlayerStats.remove(player)
 	Progression.remove(player)
 	PlotManager.release(player)
 end
+
+SaveService.start(collect)
 
 Players.PlayerAdded:Connect(onPlayerAdded)
 Players.PlayerRemoving:Connect(onPlayerRemoving)

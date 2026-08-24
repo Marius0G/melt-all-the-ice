@@ -79,6 +79,11 @@ function Remotes.purchaseResult(): RemoteEvent
 	return event("PurchaseResult")
 end
 
+-- Server -> client: (found, total, resetDelay). The map is clear.
+function Remotes.finale(): RemoteEvent
+	return event("Finale")
+end
+
 -- Create every remote up front, before any client can ask for one.
 --
 -- The lazy path above is fine on the server, which creates on demand, but the
@@ -91,6 +96,7 @@ function Remotes.initServer()
 	Remotes.discovery()
 	Remotes.purchase()
 	Remotes.purchaseResult()
+	Remotes.finale()
 end
 
 return Remotes

@@ -28,7 +28,9 @@ local Tools = require(Shared:WaitForChild("Tools"))
 
 local modules = script.Parent
 local Discoveries = require(modules:WaitForChild("Discoveries"))
+local Finale = require(modules:WaitForChild("Finale"))
 local IceField = require(modules:WaitForChild("IceField"))
+local Meltwater = require(modules:WaitForChild("Meltwater"))
 local PlayerStats = require(modules:WaitForChild("PlayerStats"))
 local PlotManager = require(modules:WaitForChild("PlotManager"))
 local Progression = require(modules:WaitForChild("Progression"))
@@ -114,7 +116,11 @@ local function onSwing(player: Player, direction: unknown)
 	if outcome.destroyed then
 		local payout = math.max(1, math.floor(Config.MONEY_PER_CHUNK * Progression.incomeMultiplier(player) + 0.5))
 		PlayerStats.addMoney(player, payout)
-		PlayerStats.setThawed(player, IceField.progress(plot.field))
+
+		local progress = IceField.progress(plot.field)
+		PlayerStats.setThawed(player, progress)
+		-- Only writes terrain when the level crosses a whole voxel step.
+		Meltwater.update(plot.water, progress)
 
 		-- Was that the last of the ice over something?
 		local found = Discoveries.onCellCleared(plot.finds, outcome.cell)
@@ -128,6 +134,22 @@ local function onSwing(player: Player, direction: unknown)
 				found.def.reward,
 				found.def.hero
 			)
+		end
+
+		if progress >= 1 then
+			local index = plot.index
+			if Finale.trigger(player, index, plot.field.origin, plot.finds.found, Discoveries.total(plot.finds)) then
+				task.delay(Finale.resetDelay(), function()
+					-- The plot may have changed hands while the finale played.
+					local current = PlotManager.get(player)
+					PlotManager.rebuild(plot)
+					Finale.clear(index)
+					if current == plot and player.Parent then
+						PlayerStats.setThawed(player, 0)
+						PlayerStats.setFinds(player, plot.finds.found, Discoveries.total(plot.finds))
+					end
+				end)
+			end
 		end
 	end
 

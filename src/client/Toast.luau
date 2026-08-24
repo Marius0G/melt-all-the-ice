@@ -181,6 +181,126 @@ local function pump()
 	end)
 end
 
+-- The map is clear. Bigger, held longer, and it counts down to the re-freeze so
+-- the reset reads as part of the design rather than as the world glitching.
+function Toast.finale(found: number, total: number, seconds: number)
+	local screen = gui
+	if not screen then
+		return
+	end
+
+	local panel = Instance.new("Frame")
+	panel.AnchorPoint = Vector2.new(0.5, 0.5)
+	panel.Position = UDim2.fromScale(0.5, 0.42)
+	panel.Size = UDim2.fromOffset(520, 210)
+	panel.BackgroundColor3 = PANEL_TOP
+	panel.BorderSizePixel = 0
+	panel.Parent = screen
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 20)
+	corner.Parent = panel
+
+	local fillGradient = Instance.new("UIGradient")
+	fillGradient.Color = ColorSequence.new(PANEL_TOP, PANEL_BOTTOM)
+	fillGradient.Rotation = 90
+	fillGradient.Parent = panel
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 7
+	stroke.Color = Color3.new(1, 1, 1)
+	stroke.LineJoinMode = Enum.LineJoinMode.Miter
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = panel
+
+	local strokeGradient = Instance.new("UIGradient")
+	strokeGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, GOLD_LIGHT),
+		ColorSequenceKeypoint.new(0.5, GOLD),
+		ColorSequenceKeypoint.new(1, GOLD_DARK),
+	})
+	strokeGradient.Rotation = 90
+	strokeGradient.Parent = stroke
+
+	addShadow(panel, 4, 8, 0.3)
+	addShadow(panel, 14, 34, 0.55)
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 22)
+	padding.PaddingBottom = UDim.new(0, 22)
+	padding.PaddingLeft = UDim.new(0, 26)
+	padding.PaddingRight = UDim.new(0, 26)
+	padding.Parent = panel
+
+	local heading = Instance.new("TextLabel")
+	heading.Size = UDim2.new(1, 0, 0, 22)
+	heading.BackgroundTransparency = 1
+	heading.Font = Enum.Font.GothamBold
+	heading.TextSize = 15
+	heading.TextColor3 = Feel.ICE_MID
+	heading.Text = "THE CAVE IS CLEAR"
+	heading.Parent = panel
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, 0, 0, 52)
+	title.Position = UDim2.fromOffset(0, 24)
+	title.BackgroundTransparency = 1
+	title.Font = Enum.Font.FredokaOne
+	title.TextSize = 44
+	title.TextColor3 = GOLD
+	title.Text = "100% THAWED"
+	title.Parent = panel
+
+	local finds = Instance.new("TextLabel")
+	finds.Size = UDim2.new(1, 0, 0, 28)
+	finds.Position = UDim2.fromOffset(0, 82)
+	finds.BackgroundTransparency = 1
+	finds.Font = Enum.Font.GothamBold
+	finds.TextSize = 20
+	finds.TextColor3 = Color3.new(1, 1, 1)
+	finds.Text = string.format("%d of %d finds uncovered", found, total)
+	finds.Parent = panel
+
+	local countdown = Instance.new("TextLabel")
+	countdown.Size = UDim2.new(1, 0, 0, 24)
+	countdown.Position = UDim2.fromOffset(0, 120)
+	countdown.BackgroundTransparency = 1
+	countdown.Font = Enum.Font.Gotham
+	countdown.TextSize = 15
+	countdown.TextColor3 = Color3.fromRGB(176, 190, 214)
+	countdown.Parent = panel
+
+	local resting = panel.Size
+	panel.Size = UDim2.fromOffset(resting.X.Offset * 0.8, resting.Y.Offset * 0.8)
+	TweenService
+		:Create(panel, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = resting,
+		})
+		:Play()
+
+	task.spawn(function()
+		for remaining = math.floor(seconds), 1, -1 do
+			if not panel.Parent then
+				return
+			end
+			countdown.Text = string.format("the ice returns in %d...", remaining)
+			task.wait(1)
+		end
+		if not panel.Parent then
+			return
+		end
+		local out = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		TweenService:Create(panel, out, { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(stroke, out, { Transparency = 1 }):Play()
+		for _, label in { heading, title, finds, countdown } do
+			TweenService:Create(label, out, { TextTransparency = 1 }):Play()
+		end
+		task.delay(0.45, function()
+			panel:Destroy()
+		end)
+	end)
+end
+
 function Toast.start()
 	gui = build()
 end

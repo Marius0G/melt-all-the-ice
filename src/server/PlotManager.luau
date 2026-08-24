@@ -21,11 +21,13 @@ local GridMath = require(Shared:WaitForChild("GridMath"))
 
 local Discoveries = require(script.Parent:WaitForChild("Discoveries"))
 local IceField = require(script.Parent:WaitForChild("IceField"))
+local Meltwater = require(script.Parent:WaitForChild("Meltwater"))
 
 export type Plot = {
 	index: number,
 	field: IceField.IceField,
 	finds: Discoveries.Field,
+	water: Meltwater.State,
 	spawn: SpawnLocation,
 	glow: Folder,
 	owner: Player?,
@@ -121,6 +123,9 @@ end
 -- so the grid has to be laid before anything can be buried in it.
 function PlotManager.rebuild(plot: Plot)
 	IceField.build(plot.field)
+	-- IceField refills the chamber with air, which removes the pool; this keeps
+	-- the tracked depth honest so the next fill starts from zero.
+	Meltwater.reset(plot.water)
 	Discoveries.populate(plot.finds, plot.field.origin, function(cell)
 		return IceField.occupied(plot.field, cell)
 	end)
@@ -133,6 +138,7 @@ function PlotManager.init()
 			index = index,
 			field = field,
 			finds = Discoveries.new(index),
+			water = Meltwater.new(field.origin),
 			spawn = makeSpawn(index, field.origin),
 			glow = makeGlacierGlow(index, field.origin),
 			owner = nil,

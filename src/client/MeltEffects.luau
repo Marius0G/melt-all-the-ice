@@ -88,10 +88,20 @@ local function onDiscovery(position: unknown, label: unknown, reward: unknown, h
 	end)
 end
 
+local function onFinale(found: unknown, total: unknown, seconds: unknown)
+	local f = if typeof(found) == "number" then found else 0
+	local t = if typeof(total) == "number" then total else 0
+	local s = if typeof(seconds) == "number" then seconds else 12
+
+	CameraShake.impulse(Feel.SHAKE_REVEAL)
+	Toast.finale(f, t, s)
+end
+
 function MeltEffects.start()
 	CameraShake.start()
 	Remotes.swingResult().OnClientEvent:Connect(onSwingResult)
 	Remotes.discovery().OnClientEvent:Connect(onDiscovery)
+	Remotes.finale().OnClientEvent:Connect(onFinale)
 end
 
 return MeltEffects
