@@ -96,6 +96,14 @@ Checklist before walking away:
 
 MCP servers are read at session start, so start the session *after* the toggles above.
 
+## Place settings that code cannot set
+
+`Players.MaxPlayers` is read-only from scripts, so it has to be set by hand in
+**Home -> Game Settings -> Players -> Max Players**. Keep it equal to
+`Config.PLOT_COUNT` (currently **6**). Plots are handed out one per player and
+the server kicks anyone who arrives with none free, so a higher MaxPlayers just
+means the surplus players get kicked on join.
+
 ## Repo layout
 
 ```
